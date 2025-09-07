@@ -1,0 +1,146 @@
+<div class="home-container">
+
+
+    <div class="dev-controls" *ngIf="isDevelopmentMode">
+        <h3>🧪 Development Mode</h3>
+        <div class="dev-buttons">
+            <button (click)="addTestRoute()" class="dev-btn">Load Test Route</button>
+            <button (click)="clearAllWaypoints()" class="dev-btn">Clear Route</button>
+            <button (click)="centerOnCurrentPosition()" class="dev-btn">Center Map</button>
+        </div>
+        <div class="dev-info">
+            <p>🔧 Environment: {{isUsingMockGPS ? 'Mock GPS' : 'Real GPS'}}</p>
+            <p>📱 Build: {{isDevelopmentMode ? 'Development' : 'Production'}}</p>
+        </div>
+    </div>
+
+    <!-- Rest of your template -->
+
+    <div class="planning-section">
+        <!-- Map Section -->
+        <!-- <div class="map-section"> -->
+
+        <!-- <h2>Click on Map to Add Waypoints</h2> -->
+        <!-- <button (click)="centerOnCurrentPosition()" class="center-btn" [disabled]="!hasGpsSignal">
+                    📍 Center on My Location
+                </button> -->
+        <!-- <div class="gps-status">
+                <label class="toggle-switch">
+                    <input type="checkbox" [(ngModel)]="gpsEnabled" (change)="toggleGPS()">
+                    <span class="slider">GPS {{gpsEnabled ? 'ON' : 'OFF'}}</span>
+                </label>
+                <div class="gps-indicator" [class.active]="gpsEnabled && hasGpsSignal"></div>
+            </div> -->
+
+        <div id="map" class="map-container"></div>
+        <!-- <div class="map-instructions">
+                <p>🗺️ Click anywhere on the map to add a waypoint</p>
+                <p>📍 Drag markers to adjust positions</p>
+                <p *ngIf="hasGpsSignal" class="gps-ready">🟢 GPS ready - showing your location</p>
+                <p *ngIf="!hasGpsSignal" class="gps-waiting">🔴 Waiting for GPS signal...</p>
+            </div> -->
+        <!-- </div> -->
+
+        <!-- Waypoints List -->
+        <div class="waypoints-section">
+            <small>v.11.050925</small>
+            <h2>Flight Route ({{waypoints.length}} waypoints)</h2>
+
+            <div class="waypoint-list" *ngIf="waypoints.length > 0">
+                <div *ngFor="let waypoint of waypoints; let i = index" class="waypoint-row">
+
+                    <div class="waypoint-index">
+                        <span class="waypoint-number">{{i + 1}}</span>
+                        <!-- Remove Button -->
+                        <button (click)="removeWaypoint(i)" class="remove-btn">×</button>
+                    </div>
+
+                    <!-- Waypoint Name -->
+                    <div class="field-group">
+                        <label>Waypoint Name</label>
+                        <input [(ngModel)]="waypoint.name" placeholder="e.g., KNYC, VOR, Airport" class="waypoint-name"
+                            (ngModelChange)="updateWaypointName(i, $event)">
+                    </div>
+
+                    <!-- Coordinates (read-only display) -->
+                    <div class="field-group">
+                        <label>Coordinates</label>
+                        <div class="coordinates">
+                            {{waypoint.latitude | number:'1.6-6'}}<br>
+                            {{waypoint.longitude | number:'1.6-6'}}
+                        </div>
+                    </div>
+
+                    <!-- Altitude QNH -->
+                    <div class="field-group">
+                        <label>Altitude QNH (ft)</label>
+                        <input type="number" [(ngModel)]="waypoint.altitudeQNH" placeholder="3000"
+                            class="altitude-input">
+                    </div>
+
+                    <!-- Speed -->
+                    <div class="field-group">
+                        <label>Speed (knots)</label>
+                        <input type="number" [(ngModel)]="waypoint.speedKnots" placeholder="120" class="speed-input">
+                    </div>
+
+                    <!-- Estimated Arrival -->
+                    <div class="field-group">
+                        <label>Est. Arrival</label>
+                        <input type="time" [(ngModel)]="waypoint.estimatedArrival" class="time-input">
+                    </div>
+
+                    <!-- Routing Degrees -->
+                    <div class="field-group">
+                        <label>Routing (°)</label>
+                        <input type="number" [(ngModel)]="waypoint.routingDegrees" placeholder="270" min="0" max="359"
+                            class="routing-input">
+                    </div>
+
+                    <!-- Required Frequency -->
+                    <div class="field-group">
+                        <label>Req. Frequency</label>
+                        <input [(ngModel)]="waypoint.frequency" placeholder="118.7" class="frequency-input">
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="no-waypoints" *ngIf="waypoints.length === 0">
+                <p>No waypoints yet. Click on the map to add your first waypoint!</p>
+            </div>
+
+            <button (click)="clearAllWaypoints()" class="clear-btn" *ngIf="waypoints.length > 0">
+                Clear All Waypoints
+            </button>
+        </div>
+    </div>
+
+    <!-- <button (click)="debugButtonState()" class="debug-btn">Debug Button State</button> -->
+
+    <div class="flight-controls">
+        <button (click)="loadRoute()" [disabled]="!canLoadRoute()" class="load-route-btn">
+            {{routeLoaded ? 'RELOAD ROUTE' : 'LOAD ROUTE FOR NAVIGATION'}}
+        </button>
+
+        <div class="status-message success" *ngIf="routeLoaded">
+            ✓ Route loaded! You can modify waypoints and reload, or switch to Navigation tab.
+        </div>
+
+        <div class="route-status" *ngIf="routeLoaded">
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span>Route active with {{waypoints.length}} waypoints</span>
+            </div>
+        </div>
+
+        <div class="requirements" *ngIf="!canLoadRoute()">
+            <p>Requirements to load route:</p>
+            <ul>
+                <li [class.met]="gpsEnabled">✓ GPS enabled</li>
+                <li [class.met]="hasWaypoints()">✓ At least 1 waypoint</li>
+                <li [class.met]="hasValidWaypoints()">✓ Valid waypoint names</li>
+            </ul>
+        </div>
+    </div>
+</div>

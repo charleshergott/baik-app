@@ -1,0 +1,239 @@
+.flight-display {
+    background: #000;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    padding-top: 10px;
+
+}
+
+.primary-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 2;
+    margin-bottom: 30px;
+}
+
+.distance-display {
+    text-align: center;
+    flex: 1;
+}
+
+.distance-value {
+    font-size: 80px;
+    font-weight: bold;
+    line-height: 1;
+    text-shadow: 0 0 10px #0f0;
+}
+
+.distance-unit {
+    font-size: 24px;
+    margin-top: 10px;
+}
+
+.waypoint-info {
+    flex: 2;
+    text-align: center;
+    padding: 0 20px;
+}
+
+.waypoint-name {
+    font-size: 36px;
+    color: #fff;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+}
+
+.bearing-eta {
+    display: flex;
+    justify-content: space-around;
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+.eta-na,
+.speed-na {
+    color: #666;
+    font-style: italic;
+}
+
+.frequency {
+    font-size: 20px;
+    color: #ff0;
+    font-weight: bold;
+}
+
+.instruments-panel {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    flex: 1;
+    margin-bottom: 20px;
+}
+
+.chronometer-panel {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.secondary-data {
+    display: flex;
+    justify-content: space-around;
+    border-top: 2px solid #333;
+    border-bottom: 2px solid #333;
+    padding: 20px 0;
+}
+
+.data-item {
+    text-align: center;
+}
+
+.label {
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 5px;
+}
+
+.value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.value.small {
+    font-size: 16px;
+}
+
+.controls {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.next-waypoint-btn {
+    background: #333;
+    color: #0f0;
+    border: 3px solid #0f0;
+    padding: 20px 40px;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Courier New', monospace;
+}
+
+.next-waypoint-btn:hover {
+    background: #0f0;
+    color: #000;
+    box-shadow: 0 0 20px #0f0;
+}
+
+.no-data {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+    color: #fff;
+    text-align: center;
+    padding: 40px;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #333;
+    border-top: 5px solid #0f0;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px 0;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.alert-content {
+    background: #fff;
+    color: #000;
+    padding: 40px;
+    border-radius: 10px;
+    text-align: center;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.alert-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.alert-content h3 {
+    margin: 0 0 20px 0;
+    font-size: 24px;
+    color: #e74c3c;
+}
+
+.alert-message {
+    font-size: 18px;
+    margin-bottom: 30px;
+    line-height: 1.4;
+}
+
+.dismiss-btn {
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    padding: 15px 30px;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .primary-nav {
+        flex-direction: column;
+    }
+
+    .distance-value {
+        font-size: 60px;
+    }
+
+    .waypoint-name {
+        font-size: 24px;
+    }
+
+    .bearing-eta {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .instruments-panel {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+}
