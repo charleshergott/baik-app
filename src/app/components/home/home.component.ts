@@ -7,6 +7,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { filter, take } from 'rxjs';
 import { environment } from '../../environments/environment.prod';
+import { ChronometerComponent } from '../chronometer copy/chronometer.component';
 
 
 declare var L: any;
@@ -15,7 +16,8 @@ declare var L: any;
   selector: 'app-home',
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    ChronometerComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'

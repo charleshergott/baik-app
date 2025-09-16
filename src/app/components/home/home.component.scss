@@ -1,428 +1,180 @@
-/* Map and Info Window Styles */
+// home.component.scss
+
+.home-container {
+    width: 100%;
+    height: 100vh; // or whatever height you need
+    overflow: hidden;
+}
+
 .map-wrapper {
     position: relative;
     width: 100%;
-    height: 400px;
-}
-
-.map-container {
-    width: 100%;
     height: 100%;
-    border-radius: 8px;
-    overflow: hidden;
-}
 
-/* Info Window Styling */
-.waypoint-info-window {
-    position: absolute;
-    background: white;
-    border: 2px solid #007bff;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    min-width: 300px;
-    max-width: 350px;
-    max-height: 80vh;
-    overflow-y: auto;
-}
+    // Chronometer overlay styling
+    app-chronometer {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
 
-.info-window-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #007bff;
-    color: white;
-    padding: 12px 16px;
-    border-radius: 10px 10px 0 0;
-}
+        // Modern glassmorphism effect
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 16px;
+        box-shadow:
+            0 8px 32px rgba(0, 0, 0, 0.1),
+            0 4px 16px rgba(0, 0, 0, 0.05);
 
-.info-window-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-}
+        padding: 16px 20px;
+        min-width: 200px;
 
-.header-buttons {
-    display: flex;
-    gap: 8px;
-}
+        // Smooth animations
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-.header-buttons button {
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    border-radius: 4px;
-    color: white;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 14px;
-}
+        // Hover effects
+        &:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: translateY(-2px);
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.15),
+                0 6px 20px rgba(0, 0, 0, 0.08);
+        }
 
-.header-buttons button:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
+        // Responsive positioning
+        @media (max-width: 768px) {
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            min-width: unset;
+            padding: 12px 16px;
+        }
 
-.delete-btn {
-    font-size: 12px;
-}
-
-.info-window-content {
-    padding: 16px;
-}
-
-.field-group {
-    margin-bottom: 12px;
-}
-
-.field-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #555;
-    margin-bottom: 4px;
-}
-
-.field-group input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    box-sizing: border-box;
-}
-
-.field-group input:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
-}
-
-.coordinates {
-    background: #f8f9fa;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-family: monospace;
-    font-size: 12px;
-    color: #666;
-    border: 1px solid #e9ecef;
-}
-
-.info-window-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #eee;
-}
-
-.save-btn {
-    flex: 1;
-    background: #28a745;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.save-btn:hover {
-    background: #218838;
-}
-
-.cancel-btn {
-    flex: 1;
-    background: #6c757d;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.cancel-btn:hover {
-    background: #545b62;
-}
-
-/* Waypoints Summary */
-.waypoints-summary {
-    margin-top: 16px;
-    background: white;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.summary-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.summary-header h3 {
-    margin: 0;
-    font-size: 14px;
-    color: #495057;
-}
-
-.summary-header small {
-    color: #6c757d;
-    font-size: 10px;
-}
-
-.clear-btn {
-    background: #dc3545;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-.clear-btn:hover {
-    background: #c82333;
-}
-
-/* Compact Waypoint List */
-.compact-waypoint-list {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.compact-waypoint {
-    display: flex;
-    align-items: center;
-    padding: 8px 16px;
-    border-bottom: 1px solid #f1f3f4;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.compact-waypoint:hover {
-    background: #f8f9fa;
-}
-
-.compact-waypoint:last-child {
-    border-bottom: none;
-}
-
-.waypoint-num {
-    background: #007bff;
-    color: white;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 600;
-    margin-right: 12px;
-    flex-shrink: 0;
-}
-
-.waypoint-name {
-    flex: 1;
-    font-weight: 500;
-    color: #495057;
-    margin-right: 8px;
-}
-
-.waypoint-alt {
-    font-size: 12px;
-    color: #6c757d;
-    background: #e9ecef;
-    padding: 2px 6px;
-    border-radius: 12px;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-    .map-wrapper {
-        height: 100vh;
+        @media (max-width: 480px) {
+            top: 5px;
+            left: 5px;
+            right: 5px;
+            padding: 10px 12px;
+            border-radius: 12px;
+        }
     }
 
-    .waypoint-info-window {
-        position: fixed !important;
-        left: 10px !important;
-        right: 10px !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        min-width: auto;
-        max-width: none;
-        max-height: 70vh;
+    // Map container
+    .map-container {
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+
+        // Ensure map fills container
+        #map {
+            width: 100%;
+            height: 100%;
+        }
     }
 
-    .hidden-mobile {
-        display: none;
+    // Adjust Leaflet controls to avoid overlap with chronometer
+    :deep(.leaflet-top.leaflet-left) {
+        top: 80px; // Adjust based on chronometer height
+        left: 20px;
+
+        @media (max-width: 768px) {
+            top: 70px;
+            left: 10px;
+        }
     }
 
-    .field-group {
-        margin-bottom: 16px;
-    }
+    // Style other Leaflet controls
+    :deep(.leaflet-control-zoom) {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 
-    .info-window-actions {
-        flex-direction: column;
-    }
+        a {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #333;
 
-    .save-btn,
-    .cancel-btn {
-        padding: 12px;
+            &:hover {
+                background: rgba(255, 255, 255, 1);
+            }
+        }
     }
 }
 
+// Alternative positioning options - uncomment the one you prefer
+
+// Top right corner
+/*
+.map-wrapper app-chronometer {
+  top: 20px;
+  right: 20px;
+  left: unset;
+}
+*/
+
+// Bottom left corner
+/*
+.map-wrapper app-chronometer {
+  top: unset;
+  bottom: 20px;
+  left: 20px;
+}
+*/
+
+// Bottom right corner
+/*
+.map-wrapper app-chronometer {
+  top: unset;
+  bottom: 20px;
+  right: 20px;
+  left: unset;
+}
+*/
+
+// Centered at top
+/*
+.map-wrapper app-chronometer {
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  
+  &:hover {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+*/
+
+// Dark theme variant (if you prefer)
+.dark-theme .map-wrapper app-chronometer {
+    background: rgba(30, 30, 30, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+
+    &:hover {
+        background: rgba(30, 30, 30, 0.35);
+    }
+}
+
+// Compact mobile version
 @media (max-width: 480px) {
-    .waypoint-info-window {
-        left: 5px !important;
-        right: 5px !important;
-        max-height: 80vh;
-    }
+    .map-wrapper app-chronometer {
+        // Make it more compact on very small screens
+        font-size: 0.9rem;
 
-    .info-window-header {
-        padding: 8px 12px;
-    }
-
-    .info-window-content {
-        padding: 12px;
-    }
-
-    .summary-header {
-        flex-direction: column;
-        gap: 8px;
-        align-items: flex-start;
-    }
-
-    .compact-waypoint {
-        padding: 12px 16px;
+        // Or make it slide in from top
+        animation: slideInFromTop 0.5s ease-out;
     }
 }
 
-/* No waypoints message */
-.no-waypoints {
-    text-align: center;
-    padding: 40px 20px;
-    color: #6c757d;
-}
+@keyframes slideInFromTop {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
 
-.no-waypoints p {
-    margin: 0;
-    font-size: 16px;
-}
-
-/* Flight controls styling (keep existing styles but ensure mobile compatibility) */
-.flight-controls {
-    margin-top: 20px;
-}
-
-.load-route-btn {
-    padding: 12px;
-    background: #007bff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 10px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    z-index: 10;
-    margin: 20px;
-}
-
-.load-route-btn:hover:not(:disabled) {
-    background: #0056b3;
-}
-
-.load-route-btn:disabled {
-    background: #6c757d;
-    cursor: not-allowed;
-}
-
-.status-message {
-    margin: 12px 0;
-    padding: 12px;
-    border-radius: 6px;
-    text-align: center;
-}
-
-.status-message.success {
-    background: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.route-status {
-    margin: 12px 0;
-}
-
-.status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: #495057;
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    background: #28a745;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
+    to {
+        transform: translateY(0);
         opacity: 1;
     }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-.requirements {
-    margin: 12px 0;
-}
-
-.requirements p {
-    margin: 0 0 8px 0;
-    font-weight: 600;
-    color: #495057;
-}
-
-.requirements ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.requirements li {
-    padding: 4px 0;
-    color: #dc3545;
-}
-
-.requirements li.met {
-    color: #28a745;
-}
-
-/* Ensure proper stacking */
-.map-container {
-    position: relative;
-    z-index: 1;
-}
-
-.waypoint-info-window {
-    z-index: 1000;
 }
