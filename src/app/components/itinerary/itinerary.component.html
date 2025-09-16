@@ -10,23 +10,6 @@
         </button>
     </div>
 
-    <div class="status" [class.error]="!gpsAvailable">
-        <div class="status-item">
-            <span class="status-label">GPS Status:</span>
-            <span class="status-value" [class.active]="gpsAvailable">
-                {{ gpsAvailable ? 'Available' : 'Unavailable' }}
-            </span>
-        </div>
-        <div class="status-item" *ngIf="isRecording">
-            <span class="status-label">Recording:</span>
-            <span class="status-value active">{{ formatDuration(recordingDuration) }}</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">Points:</span>
-            <span class="status-value">{{ points.length }}</span>
-        </div>
-    </div>
-
     <div class="current-data" *ngIf="currentPosition">
         <h3>Current Position</h3>
         <div class="data-grid">

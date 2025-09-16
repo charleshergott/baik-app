@@ -21,18 +21,26 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   // Watch properties
   private currentTimeInterval: any;
 
-  // Speed monitoring properties
-  currentSpeed = 0; // in knots
-  speedThreshold = 30; // knots
+  // Cycling speed monitoring properties
+  currentSpeed = 0; // in km/h
+  startThreshold = 3; // km/h - speed to start chronometer
+  stopThreshold = 1; // km/h - speed to stop chronometer (lower for hysteresis)
   autoStartEnabled = true;
   isGPSEnabled = false;
   private speedMonitoringInterval: any;
   private lastPosition: GeolocationPosition | null = null;
   private lastPositionTime = 0;
 
-  // Speed history for smoothing
+  // Speed history for smoothing and stop detection
   private speedHistory: number[] = [];
-  private readonly SPEED_HISTORY_LENGTH = 5;
+  private readonly SPEED_HISTORY_LENGTH = 8; // More samples for stability
+  private stoppedDuration = 0; // How long we've been below stop threshold
+  private STOP_DELAY = 3000; // 3 seconds below threshold before stopping (ms)
+  private lastSpeedCheck = 0;
+
+  // GPS accuracy and reliability
+  private readonly MIN_ACCURACY = 20; // meters - ignore readings worse than this
+  private readonly MIN_TIME_BETWEEN_READINGS = 1000; // ms
 
   ngOnInit(): void {
     // Auto-start interval for smooth chronometer updates
@@ -48,7 +56,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     }, 1000);
 
     // Initialize speed monitoring
-    this.initializeSpeedMonitoring();
+    this.initializeCyclingSpeedMonitoring();
   }
 
   ngOnDestroy(): void {
@@ -63,22 +71,22 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     }
   }
 
-  // Speed monitoring methods
-  initializeSpeedMonitoring(): void {
+  // Cycling-specific speed monitoring
+  initializeCyclingSpeedMonitoring(): void {
     if ('geolocation' in navigator) {
       this.enableGPSSpeedMonitoring();
     } else {
       console.warn('Geolocation not supported, using manual speed input');
-      // Fallback to simulated speed for demo purposes
-      this.startSpeedSimulation();
+      // Fallback to simulated cycling speed for demo
+      this.startCyclingSpeedSimulation();
     }
   }
 
   enableGPSSpeedMonitoring(): void {
-    const options = {
+    const options: PositionOptions = {
       enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 1000
+      timeout: 10000,
+      maximumAge: 2000 // Allow slightly older readings for better performance
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -86,15 +94,16 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         this.isGPSEnabled = true;
         this.lastPosition = position;
         this.lastPositionTime = Date.now();
-        console.log('GPS enabled for speed monitoring');
+        this.lastSpeedCheck = Date.now();
+        console.log('GPS enabled for cycling speed monitoring');
 
         // Start watching position changes
         navigator.geolocation.watchPosition(
-          (newPosition) => this.calculateSpeedFromGPS(newPosition),
+          (newPosition) => this.calculateCyclingSpeedFromGPS(newPosition),
           (error) => {
             console.error('GPS error:', error);
             this.isGPSEnabled = false;
-            this.startSpeedSimulation();
+            this.startCyclingSpeedSimulation();
           },
           options
         );
@@ -102,20 +111,32 @@ export class ChronometerComponent implements OnInit, OnDestroy {
       (error) => {
         console.error('GPS initialization failed:', error);
         this.isGPSEnabled = false;
-        this.startSpeedSimulation();
+        this.startCyclingSpeedSimulation();
       },
       options
     );
   }
 
-  calculateSpeedFromGPS(position: GeolocationPosition): void {
-    if (!this.lastPosition) {
-      this.lastPosition = position;
-      this.lastPositionTime = Date.now();
+  calculateCyclingSpeedFromGPS(position: GeolocationPosition): void {
+    const currentTime = Date.now();
+
+    // Check if we have sufficient accuracy
+    if (position.coords.accuracy > this.MIN_ACCURACY) {
+      console.log(`GPS accuracy too low: ${position.coords.accuracy}m`);
       return;
     }
 
-    const currentTime = Date.now();
+    // Check if enough time has passed
+    if (currentTime - this.lastPositionTime < this.MIN_TIME_BETWEEN_READINGS) {
+      return;
+    }
+
+    if (!this.lastPosition) {
+      this.lastPosition = position;
+      this.lastPositionTime = currentTime;
+      return;
+    }
+
     const timeDiff = (currentTime - this.lastPositionTime) / 1000; // seconds
 
     if (timeDiff > 0) {
@@ -127,10 +148,20 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         position.coords.longitude
       );
 
-      // Convert to knots (nautical miles per hour)
-      const speedKnots = (distance / timeDiff) * 3600 / 1852;
+      // Convert to km/h
+      const speedKmh = (distance / timeDiff) * 3.6;
 
-      this.updateSpeed(speedKnots);
+      // Use GPS speed if available and reasonable, otherwise use calculated speed
+      let finalSpeed = speedKmh;
+      if (position.coords.speed !== null && position.coords.speed >= 0) {
+        const gpsSpeedKmh = position.coords.speed * 3.6;
+        // Use GPS speed if it's within reasonable range of calculated speed
+        if (Math.abs(gpsSpeedKmh - speedKmh) < 10) {
+          finalSpeed = gpsSpeedKmh;
+        }
+      }
+
+      this.updateCyclingSpeed(finalSpeed);
 
       this.lastPosition = position;
       this.lastPositionTime = currentTime;
@@ -152,28 +183,58 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     return R * c; // Distance in meters
   }
 
-  startSpeedSimulation(): void {
-    // Simulate speed changes for demo purposes
+  startCyclingSpeedSimulation(): void {
+    // Simulate realistic cycling speeds (0-25 km/h with stops)
     let simulatedSpeed = 0;
-    let increasing = true;
+    let phase = 'stopped'; // 'stopped', 'accelerating', 'cruising', 'slowing'
+    let phaseTimer = 0;
 
     this.speedMonitoringInterval = setInterval(() => {
-      if (increasing) {
-        simulatedSpeed += Math.random() * 3;
-        if (simulatedSpeed >= 40) increasing = false;
-      } else {
-        simulatedSpeed -= Math.random() * 2;
-        if (simulatedSpeed <= 0) {
+      phaseTimer += 2000;
+
+      switch (phase) {
+        case 'stopped':
           simulatedSpeed = 0;
-          increasing = true;
-        }
+          if (phaseTimer > 5000) { // Stop for 5 seconds
+            phase = 'accelerating';
+            phaseTimer = 0;
+          }
+          break;
+
+        case 'accelerating':
+          simulatedSpeed += 2 + Math.random() * 3;
+          if (simulatedSpeed >= 15 || phaseTimer > 10000) {
+            phase = 'cruising';
+            phaseTimer = 0;
+          }
+          break;
+
+        case 'cruising':
+          simulatedSpeed = 15 + Math.random() * 8 - 4; // 11-19 km/h range
+          if (phaseTimer > 15000) { // Cruise for 15 seconds
+            phase = 'slowing';
+            phaseTimer = 0;
+          }
+          break;
+
+        case 'slowing':
+          simulatedSpeed -= 2 + Math.random() * 2;
+          if (simulatedSpeed <= 0 || phaseTimer > 8000) {
+            simulatedSpeed = 0;
+            phase = 'stopped';
+            phaseTimer = 0;
+          }
+          break;
       }
 
-      this.updateSpeed(simulatedSpeed);
+      simulatedSpeed = Math.max(0, simulatedSpeed);
+      this.updateCyclingSpeed(simulatedSpeed);
     }, 2000);
   }
 
-  updateSpeed(newSpeed: number): void {
+  updateCyclingSpeed(newSpeed: number): void {
+    const currentTime = Date.now();
+
     // Add to speed history for smoothing
     this.speedHistory.push(newSpeed);
     if (this.speedHistory.length > this.SPEED_HISTORY_LENGTH) {
@@ -184,18 +245,27 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     const smoothedSpeed = this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
     this.currentSpeed = Math.max(0, smoothedSpeed);
 
-    // Auto-start/stop logic
+    // Auto-start/stop logic with hysteresis and delay
     if (this.autoStartEnabled) {
-      if (this.currentSpeed >= this.speedThreshold && !this.isRunning) {
+      if (this.currentSpeed >= this.startThreshold && !this.isRunning) {
         this.autoStartChronometer();
-      } else if (this.currentSpeed < this.speedThreshold && this.isRunning) {
-        this.autoStopChronometer();
+        this.stoppedDuration = 0; // Reset stopped duration
+      } else if (this.currentSpeed <= this.stopThreshold && this.isRunning) {
+        // Start counting how long we've been below threshold
+        if (this.stoppedDuration === 0) {
+          this.stoppedDuration = currentTime;
+        } else if (currentTime - this.stoppedDuration >= this.STOP_DELAY) {
+          this.autoStopChronometer();
+        }
+      } else if (this.currentSpeed > this.stopThreshold) {
+        // Reset stopped duration if speed goes back up
+        this.stoppedDuration = 0;
       }
     }
   }
 
   autoStartChronometer(): void {
-    console.log(`Auto-starting chronometer: Speed ${this.currentSpeed.toFixed(1)} kn >= ${this.speedThreshold} kn`);
+    console.log(`🚴‍♂️ Auto-starting: Speed ${this.currentSpeed.toFixed(1)} km/h >= ${this.startThreshold} km/h`);
     if (!this.isRunning) {
       this.startTime = Date.now() - this.elapsedTime;
       this.isRunning = true;
@@ -203,28 +273,34 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   }
 
   autoStopChronometer(): void {
-    console.log(`Auto-stopping chronometer: Speed ${this.currentSpeed.toFixed(1)} kn < ${this.speedThreshold} kn`);
+    console.log(`🛑 Auto-stopping: Speed ${this.currentSpeed.toFixed(1)} km/h <= ${this.stopThreshold} km/h for ${this.STOP_DELAY / 1000}s`);
     if (this.isRunning) {
       this.isRunning = false;
+      this.stoppedDuration = 0; // Reset for next time
     }
   }
 
   // Manual speed input method
   setManualSpeed(speed: number): void {
-    this.updateSpeed(speed);
+    this.updateCyclingSpeed(speed);
   }
 
   // Settings methods
-  setSpeedThreshold(threshold: number): void {
-    this.speedThreshold = threshold;
+  setStartThreshold(threshold: number): void {
+    this.startThreshold = Math.max(1, threshold);
+    this.stopThreshold = Math.max(0.5, threshold - 1); // Always lower than start
+  }
+
+  setStopDelay(delaySeconds: number): void {
+    this.STOP_DELAY = Math.max(1, delaySeconds) * 1000;
   }
 
   toggleAutoStart(): void {
     this.autoStartEnabled = !this.autoStartEnabled;
     if (!this.autoStartEnabled && this.isRunning) {
-      // If auto-start is disabled while running, keep running but mark as manual
-      console.log('Auto-start disabled - chronometer continues in manual mode');
+      console.log('🔧 Auto-start disabled - chronometer continues in manual mode');
     }
+    this.stoppedDuration = 0; // Reset stopped duration
   }
 
   // Speed formatting
@@ -233,11 +309,29 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   }
 
   getSpeedStatus(): string {
-    if (this.currentSpeed >= this.speedThreshold) {
-      return 'ABOVE THRESHOLD';
+    if (this.stoppedDuration > 0) {
+      const timeToStop = Math.max(0, this.STOP_DELAY - (Date.now() - this.stoppedDuration));
+      return `STOPPING IN ${Math.ceil(timeToStop / 1000)}s`;
+    } else if (this.currentSpeed >= this.startThreshold) {
+      return 'MOVING';
     } else {
-      return 'BELOW THRESHOLD';
+      return 'STOPPED';
     }
+  }
+
+  getCyclingStats(): { distance: number, avgSpeed: number, maxSpeed: number } {
+    // Calculate approximate distance traveled (very rough estimate)
+    const timeInHours = this.elapsedTime / (1000 * 60 * 60);
+    const avgSpeed = this.speedHistory.length > 0 ?
+      this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length : 0;
+    const maxSpeed = Math.max(...this.speedHistory, 0);
+    const distance = timeInHours * avgSpeed;
+
+    return {
+      distance: Math.max(0, distance),
+      avgSpeed,
+      maxSpeed
+    };
   }
 
   // Chronometer methods (unchanged)
@@ -257,6 +351,8 @@ export class ChronometerComponent implements OnInit, OnDestroy {
       this.elapsedTime = 0;
       this.startTime = 0;
       this.lapTimes = [];
+      this.speedHistory = [];
+      this.stoppedDuration = 0;
     }
   }
 
