@@ -1,0 +1,75 @@
+<div class="time-instruments-container">
+    <!-- Chronometer Section -->
+    <div class="chronometer">
+        <div class="chrono-header">
+            <!-- <h3>CHRONOMETER</h3> -->
+            <!-- <div class="chrono-status" [class.running]="isRunning">
+                {{isRunning ? 'RUNNING' : 'STOPPED'}}
+            </div> -->
+        </div>
+        <div class="time-display">
+            <div class="main-time">{{formatTime(elapsedTime)}}</div>
+            <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
+        </div>
+        <div class="chrono-controls">
+            <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning" class="control-btn">
+                {{isRunning ? 'STOP' : 'START'}}
+            </button>
+            <button (click)="reset()" [disabled]="isRunning" class="control-btn reset">
+                RESET
+            </button>
+            <!-- <button (click)="lap()" [disabled]="!isRunning" class="control-btn lap">
+                LAP
+            </button> -->
+        </div>
+        <!-- <div class="lap-times" *ngIf="lapTimes.length > 0">
+            <div class="lap-header">LAP TIMES</div>
+            <div class="lap-list">
+                <div *ngFor="let lap of lapTimes; let i = index" class="lap-time">
+                    <span class="lap-number">{{i + 1}}</span>
+                    <span class="lap-value">{{formatTime(lap)}}</span>
+                </div>
+            </div>
+        </div> -->
+    </div>
+
+    <!-- Watch Section -->
+    <div class="watch">
+        <!-- <div class="watch-header">
+            <h3>CURRENT TIME</h3>
+            <div class="watch-timezone">{{getCurrentTimezone()}}</div>
+        </div> -->
+
+        <!-- Digital Watch Display -->
+        <div class="watch-display">
+            <div class="current-time">{{getCurrentTime()}}</div>
+            <!-- <div class="current-date">{{getCurrentDate()}}</div> -->
+        </div>
+
+        <!-- Analog Watch (Optional) -->
+        <!-- <div class="analog-watch">
+            <div class="clock-face">
+                <div class="hour-hand" [style.transform]="'rotate(' + getHourAngle() + 'deg)'"></div>
+                <div class="minute-hand" [style.transform]="'rotate(' + getMinuteAngle() + 'deg)'"></div>
+                <div class="second-hand" [style.transform]="'rotate(' + getSecondAngle() + 'deg)'"></div>
+                <div class="center-dot"></div>
+                               <div class="hour-marker" *ngFor="let hour of [1,2,3,4,5,6,7,8,9,10,11,12]"
+                    [style.transform]="'rotate(' + (hour * 30) + 'deg)'">
+                    <div class="marker-line"></div>
+                </div>
+            </div>
+        </div> -->
+
+        <!-- World Clock (Optional) -->
+        <!-- <div class="world-clock">
+            <div class="world-time-item">
+                <span class="city-name">UTC</span>
+                <span class="city-time">{{getUTCTime()}}</span>
+            </div>
+            <div class="world-time-item">
+                <span class="city-name">LOCAL</span>
+                <span class="city-time">{{getCurrentTime()}}</span>
+            </div>
+        </div> -->
+    </div>
+</div>

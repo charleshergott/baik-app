@@ -1,14 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { GpsService } from '../../services/gps.service';
 import { AlertService } from '../../services/alert.service';
-import { NavigationDisplayComponent } from '../navigation-display/navigation-display.component';
 import { CommonModule } from '@angular/common';
 import { HomeComponent } from '../home/home.component';
 
 @Component({
   selector: 'app-main',
   imports: [
-    NavigationDisplayComponent,
     CommonModule,
     HomeComponent
   ],
