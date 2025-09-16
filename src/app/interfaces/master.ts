@@ -9,6 +9,25 @@ export interface Position {
     timestamp: number;
 }
 
+export interface ItineraryPoint {
+    id: number;
+    timestamp: Date;
+    latitude: number;
+    longitude: number;
+    altitude: number | null;
+    speed: number | null; // m/s from GPS, converted to km/h for display
+    accuracy: number;
+}
+
+export interface SavedRoute {
+    id: string;
+    name: string;
+    waypoints: Waypoint[];
+    createdAt: string;
+    lastUsed?: string;
+    description?: string;
+}
+
 
 export interface Waypoint {
     id: string;

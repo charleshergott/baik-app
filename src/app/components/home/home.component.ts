@@ -1,5 +1,5 @@
 import { Component, HostListener } from '@angular/core';
-import { FlightAlert, Route, Waypoint } from '../../interfaces/master';
+import { FlightAlert, Route, SavedRoute, Waypoint } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
 import { NavigationService } from '../../services/navigation.service';
 import { AlertService } from '../../services/alert.service';
@@ -39,7 +39,8 @@ export class HomeComponent {
   infoWindowPosition = { x: 0, y: 0 };
   isMobile = false;
 
-
+  // Saved routes for quick access
+  savedRoutes: SavedRoute[] = [];
 
   // Route line visualization
   private routeLine: any = null;
@@ -48,7 +49,6 @@ export class HomeComponent {
     private gpsService: GpsService,
     private navigationService: NavigationService,
     private alertService: AlertService,
-
   ) {
     this.checkIfMobile();
 
@@ -69,8 +69,13 @@ export class HomeComponent {
     // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
 
+
   }
 
+
+
+
+  // Check if device is mobile
   checkIfMobile() {
     this.isMobile = window.innerWidth <= 768;
   }
@@ -512,7 +517,6 @@ export class HomeComponent {
   updateWaypointName(index: number, newName: string): void {
     this.waypoints[index].name = newName;
     this.updateMapMarker(index);
-
   }
 
   async removeWaypoint(index: number): Promise<void> {
@@ -710,6 +714,23 @@ export class HomeComponent {
     }, 3000);
   }
 
+  // Save current flight plan as a reusable route
+  async saveCurrentRouteAs(name: string, description?: string): Promise<void> {
+    if (!this.hasValidWaypoints()) {
+      alert('Please add some waypoints with names before saving the route.');
+      return;
+    }
+
+    const savedRoute: SavedRoute = {
+      id: this.generateId(),
+      name: name,
+      description: description || '',
+      waypoints: [...this.waypoints], // Deep copy
+      createdAt: new Date().toISOString()
+    };
+
+  }
+
   private createDefaultAlerts(waypoints: Waypoint[]): void {
     waypoints.forEach(waypoint => {
       const alert: FlightAlert = {
@@ -740,6 +761,57 @@ export class HomeComponent {
 
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
+  }
+
+  setMockSpeed(speedKnots: number): void {
+    // This would require adding a method to GPS service to adjust mock speed
+    console.log(`Setting mock speed to ${speedKnots} knots`);
+  }
+
+  async addTestRoute(): Promise<void> {
+    // Clear existing waypoints
+    await this.clearAllWaypoints();
+
+    // Add test waypoints for development
+    const testWaypoints = [
+      {
+        id: 'test1',
+        name: 'START',
+        latitude: 40.7580,
+        longitude: -73.9855,
+        altitudeQNH: 3000,
+        speedKnots: 120,
+        frequency: '118.7',
+        estimatedArrival: '',
+        routingDegrees: 0
+      },
+      {
+        id: 'test2',
+        name: 'MID',
+        latitude: 40.8176,
+        longitude: -73.7782,
+        altitudeQNH: 3500,
+        speedKnots: 120,
+        frequency: '119.1',
+        estimatedArrival: '',
+        routingDegrees: 0
+      },
+      {
+        id: 'test3',
+        name: 'END',
+        latitude: 40.8848,
+        longitude: -73.5764,
+        altitudeQNH: 3000,
+        speedKnots: 120,
+        frequency: '120.5',
+        estimatedArrival: '',
+        routingDegrees: 0
+      }
+    ];
+
+    this.waypoints = testWaypoints;
+    this.updateMapWithWaypoints();
+    await this.loadRoute();
   }
 
   // Handle window resize for mobile detection

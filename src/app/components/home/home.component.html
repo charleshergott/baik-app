@@ -1,12 +1,5 @@
 <div class="home-container">
 
-    <div class="requirements" *ngIf="!canLoadRoute()">
-
-        <ul>
-            <li [class.met]="gpsEnabled">✓ GPS enabled</li>
-        </ul>
-    </div>
-
     <div class="planning-section">
 
         <!-- Map Section with Info Window -->
@@ -14,8 +7,7 @@
 
             <div id="map" class="map-container"></div>
 
+
         </div>
 
     </div>
-
-</div>

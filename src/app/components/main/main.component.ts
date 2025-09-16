@@ -3,12 +3,14 @@ import { GpsService } from '../../services/gps.service';
 import { AlertService } from '../../services/alert.service';
 import { CommonModule } from '@angular/common';
 import { HomeComponent } from '../home/home.component';
+import { ItineraryComponent } from '../itinerary/itinerary.component';
 
 @Component({
   selector: 'app-main',
   imports: [
     CommonModule,
-    HomeComponent
+    HomeComponent,
+    ItineraryComponent
   ],
   templateUrl: './main.component.html',
   styleUrl: './main.component.scss'
@@ -16,10 +18,10 @@ import { HomeComponent } from '../home/home.component';
 
 export class MainComponent implements OnInit {
 
-  activeTab = 'plan'; // Start with Flight Plan tab
+  activeTab = 'map'; // Start with Flight Plan tab
   tabs = [
-    { id: 'plan', label: 'Flight Plan' },
-    { id: 'nav', label: 'Navigation' }
+    { id: 'map', label: 'Map' },
+    { id: 'nav', label: 'Itinerary' }
   ];
 
   constructor(

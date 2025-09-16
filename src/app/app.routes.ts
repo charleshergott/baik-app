@@ -8,7 +8,7 @@ export const routes: Routes = [
         pathMatch: 'full',
     },
     {
-        path: 'inbox',
+        path: 'home',
         component: MainComponent,
     },
     // {

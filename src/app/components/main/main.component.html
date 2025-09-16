@@ -5,6 +5,7 @@
         </button>
     </nav>
     <div class="tab-content">
-        <app-home *ngIf="activeTab === 'plan'"></app-home>
+        <app-home *ngIf="activeTab === 'map'"></app-home>
+        <app-itinerary *ngIf="activeTab === 'nav'"></app-itinerary>
     </div>
 </div>

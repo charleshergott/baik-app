@@ -1,0 +1,84 @@
+<div class="itinerary-container">
+    <div class="controls">
+        <button class="control-btn start-btn" [class.recording]="isRecording" (click)="toggleRecording()"
+            [disabled]="!gpsAvailable">
+            {{ isRecording ? '⏹️ Stop Recording' : '▶️ Start Recording' }}
+        </button>
+
+        <button class="control-btn clear-btn" (click)="clearItinerary()" [disabled]="points.length === 0">
+            🗑️ Clear
+        </button>
+    </div>
+
+    <div class="status" [class.error]="!gpsAvailable">
+        <div class="status-item">
+            <span class="status-label">GPS Status:</span>
+            <span class="status-value" [class.active]="gpsAvailable">
+                {{ gpsAvailable ? 'Available' : 'Unavailable' }}
+            </span>
+        </div>
+        <div class="status-item" *ngIf="isRecording">
+            <span class="status-label">Recording:</span>
+            <span class="status-value active">{{ formatDuration(recordingDuration) }}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Points:</span>
+            <span class="status-value">{{ points.length }}</span>
+        </div>
+    </div>
+
+    <div class="current-data" *ngIf="currentPosition">
+        <h3>Current Position</h3>
+        <div class="data-grid">
+            <div class="data-item">
+                <span class="data-label">Speed</span>
+                <span class="data-value">{{ formatSpeed(currentPosition.coords.speed) }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Altitude</span>
+                <span class="data-value">{{ formatAltitude(currentPosition.coords.altitude) }}</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Accuracy</span>
+                <span class="data-value">{{ currentPosition.coords.accuracy.toFixed(1) }}m</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="itinerary-list">
+        <h3>Recorded Points ({{ points.length }})</h3>
+
+        <div class="list-container" *ngIf="points.length > 0; else noPoints">
+            <div class="point-item" *ngFor="let point of points; let i = index">
+                <div class="point-header">
+                    <span class="point-number">#{{ point.id }}</span>
+                    <span class="point-time">{{ point.timestamp | date:'HH:mm:ss' }}</span>
+                </div>
+                <div class="point-data">
+                    <div class="point-coord">
+                        <strong>📍</strong> {{ point.latitude.toFixed(6) }}, {{ point.longitude.toFixed(6) }}
+                    </div>
+                    <div class="point-details">
+                        <span class="detail-item">
+                            <strong>🚴</strong> {{ formatSpeed(point.speed) }}
+                        </span>
+                        <span class="detail-item">
+                            <strong>⛰️</strong> {{ formatAltitude(point.altitude) }}
+                        </span>
+                        <span class="detail-item">
+                            <strong>📡</strong> {{ point.accuracy.toFixed(1) }}m
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ng-template #noPoints>
+            <div class="empty-state">
+                <p>No points recorded yet.</p>
+                <p>{{ gpsAvailable ? 'Press "Start Recording" to begin tracking.' : 'GPS is not available on this
+                    device.' }}</p>
+            </div>
+        </ng-template>
+    </div>
+</div>
