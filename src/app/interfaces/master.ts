@@ -94,3 +94,16 @@ export interface MovementConfig {
     stationaryRadius: number; // meters
     historyLength: number;
 }
+
+
+export interface CyclingTrip {
+    id: string; // Date string (YYYY-MM-DD)
+    startTime: Date;
+    endTime?: Date;
+    points: ItineraryPoint[];
+    totalDistance: number; // in meters
+    maxSpeed: number; // in m/s
+    averageSpeed: number; // in km/h
+    duration: number; // in seconds
+    isCompleted: boolean;
+}

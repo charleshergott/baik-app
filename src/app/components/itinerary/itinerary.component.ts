@@ -1,6 +1,8 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { ItineraryPoint } from '../../interfaces/master';
+import { CyclingTrip, ItineraryPoint } from '../../interfaces/master';
 import { CommonModule, DatePipe } from '@angular/common';
+import { CyclingDataService } from '../../services/cycling-data.service';
+
 
 @Component({
   selector: 'app-itinerary',
@@ -13,6 +15,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 })
 
 export class ItineraryComponent implements OnInit, OnDestroy {
+
   points: ItineraryPoint[] = [];
   isRecording = false;
   gpsAvailable = false;
@@ -42,14 +45,19 @@ export class ItineraryComponent implements OnInit, OnDestroy {
   private stationaryStartTime = 0;
   private stationaryInterval: any;
 
-  // Distance tracking properties
-  totalDistance = 0; // Total distance in meters
-  currentTripDistance = 0; // Distance for current recording session
-  private tripStartPointIndex = 0; // Index where current trip started
+  // Trip and distance tracking
+  currentTrip: CyclingTrip | null = null;
+  currentTripId: string | null = null;
+  allTrips: CyclingTrip[] = [];
+  totalDistanceAllTrips = 0;
 
-  ngOnInit() {
+  constructor(
+    private cyclingDataService: CyclingDataService
+  ) { }
+
+  async ngOnInit() {
     this.checkGpsAvailability();
-    this.loadSavedItinerary();
+    await this.initializeData();
   }
 
 
@@ -58,83 +66,70 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     this.gpsAvailable = 'geolocation' in navigator;
   }
 
-  private loadSavedItinerary() {
-    const saved = localStorage.getItem('bicycle-itinerary');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        this.points = parsed.map((p: any) => ({
-          ...p,
-          timestamp: new Date(p.timestamp)
-        }));
+  copyCoordinates(lat: number, lng: number): void {
+    const coords = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    navigator.clipboard.writeText(coords).then(() => {
+      // Optional: Show toast notification
+      console.log('Coordinates copied to clipboard');
+    });
+  }
+
+  private async initializeData() {
+    try {
+      // Migrate old localStorage data if it exists
+      await this.cyclingDataService.migrateFromLocalStorage();
+
+      // Load all trips to calculate total distance
+      await this.loadAllTrips();
+
+      // Check if there's an active trip for today
+      await this.loadOrCreateTodaysTrip();
+
+    } catch (error) {
+      console.error('Error initializing data:', error);
+    }
+  }
+
+  private async loadAllTrips() {
+    try {
+      this.allTrips = await this.cyclingDataService.getAllTrips();
+
+      // Calculate total distance across all completed trips
+      this.totalDistanceAllTrips = this.allTrips
+        .filter(trip => trip.isCompleted)
+        .reduce((total, trip) => total + trip.totalDistance, 0);
+
+    } catch (error) {
+      console.error('Error loading trips:', error);
+    }
+  }
+
+  private async loadOrCreateTodaysTrip() {
+    const todayId = this.cyclingDataService.getTodayTripId();
+
+    try {
+      let trip = await this.cyclingDataService.getTrip(todayId);
+
+      if (!trip) {
+        // Create new trip for today
+        await this.cyclingDataService.createTrip(new Date());
+        trip = await this.cyclingDataService.getTrip(todayId);
+      }
+
+      if (trip) {
+        this.currentTrip = trip;
+        this.currentTripId = todayId;
+        this.points = [...trip.points];
         this.pointCounter = this.points.length > 0 ? Math.max(...this.points.map(p => p.id)) + 1 : 1;
 
-        // Calculate total distance from saved points
-        this.calculateTotalDistance();
-        this.currentTripDistance = 0; // Reset trip distance on load
-        this.tripStartPointIndex = this.points.length;
-      } catch (e) {
-        console.error('Error loading saved itinerary:', e);
+        // If trip is not completed and has points, it might have been interrupted
+        if (!trip.isCompleted && trip.points.length > 0) {
+          console.log('Found incomplete trip with existing points');
+        }
       }
+    } catch (error) {
+      console.error('Error loading today\'s trip:', error);
     }
-  }
-
-  private calculateTotalDistance(): void {
-    this.totalDistance = 0;
-
-    for (let i = 1; i < this.points.length; i++) {
-      const prevPoint = this.points[i - 1];
-      const currentPoint = this.points[i];
-
-      const distance = this.calculateDistance(
-        prevPoint.latitude,
-        prevPoint.longitude,
-        currentPoint.latitude,
-        currentPoint.longitude
-      );
-
-      this.totalDistance += distance;
-    }
-  }
-
-  getCurrentTripDistance(): number {
-    if (!this.isRecording || this.tripStartPointIndex >= this.points.length) {
-      return this.currentTripDistance;
-    }
-
-    let tripDistance = 0;
-
-    // Calculate from trip start to current position
-    for (let i = this.tripStartPointIndex + 1; i < this.points.length; i++) {
-      const prevPoint = this.points[i - 1];
-      const currentPoint = this.points[i];
-
-      const distance = this.calculateDistance(
-        prevPoint.latitude,
-        prevPoint.longitude,
-        currentPoint.latitude,
-        currentPoint.longitude
-      );
-
-      tripDistance += distance;
-    }
-
-    return tripDistance;
-  }
-
-  clearItinerary() {
-    if (confirm('Are you sure you want to clear all recorded points?')) {
-      this.points = [];
-      this.pointCounter = 1;
-      this.totalDistance = 0;
-      this.currentTripDistance = 0;
-      this.tripStartPointIndex = 0;
-      this.saveItinerary();
-    }
-  }
-
-  private saveItinerary() {
-    localStorage.setItem('bicycle-itinerary', JSON.stringify(this.points));
   }
 
   toggleRecording() {
@@ -146,7 +141,7 @@ export class ItineraryComponent implements OnInit, OnDestroy {
   }
 
   private startRecording() {
-    if (!this.gpsAvailable) return;
+    if (!this.gpsAvailable || !this.currentTripId) return;
 
     this.isRecording = true;
     this.recordingStartTime = new Date();
@@ -155,9 +150,10 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     this.isMoving = false;
     this.speedHistory = [];
 
-    // Mark the start of current trip for distance calculation
-    this.tripStartPointIndex = this.points.length;
-    this.currentTripDistance = 0;
+    // Update trip start time if this is the first recording session
+    if (this.currentTrip && this.currentTrip.points.length === 0) {
+      this.currentTrip.startTime = this.recordingStartTime;
+    }
 
     // Start watching position for real-time updates and movement detection
     this.startWatchingPosition();
@@ -181,8 +177,9 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     this.startStationaryTimer();
   }
 
-  private stopRecording() {
+  private async stopRecording() {
     this.isRecording = false;
+    const endTime = new Date();
     this.recordingStartTime = null;
     this.recordingDuration = 0;
     this.currentSpeed = 0;
@@ -204,7 +201,19 @@ export class ItineraryComponent implements OnInit, OnDestroy {
 
     // Record final point when stopping
     if (this.currentPosition) {
-      this.recordCurrentPosition(true);
+      await this.recordCurrentPosition(true);
+    }
+
+    // Mark trip as completed if it has points
+    if (this.currentTripId && this.points.length > 0) {
+      try {
+        await this.cyclingDataService.completeTrip(this.currentTripId);
+        // Reload data to get updated statistics
+        await this.loadAllTrips();
+        await this.loadOrCreateTodaysTrip();
+      } catch (error) {
+        console.error('Error completing trip:', error);
+      }
     }
   }
 
@@ -347,14 +356,14 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     }
   }
 
-  private recordCurrentPosition(forceRecord: boolean = false) {
-    if (!this.gpsAvailable) return;
+  private async recordCurrentPosition(forceRecord: boolean = false) {
+    if (!this.gpsAvailable || !this.currentTripId) return;
 
     // Only record if moving, unless forced (start/stop points)
     if (!forceRecord && !this.isMoving) return;
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const point: ItineraryPoint = {
           id: this.pointCounter++,
           timestamp: new Date(),
@@ -365,26 +374,17 @@ export class ItineraryComponent implements OnInit, OnDestroy {
           accuracy: position.coords.accuracy
         };
 
-        // Calculate distance from previous point
-        if (this.points.length > 0) {
-          const lastPoint = this.points[this.points.length - 1];
-          const distance = this.calculateDistance(
-            lastPoint.latitude,
-            lastPoint.longitude,
-            point.latitude,
-            point.longitude
-          );
-
-          this.totalDistance += distance;
-
-          // Add to current trip distance if we're recording
-          if (this.isRecording) {
-            this.currentTripDistance += distance;
-          }
-        }
-
+        // Add to local array for immediate UI update
         this.points.push(point);
-        this.saveItinerary();
+
+        // Save to IndexedDB
+        try {
+          await this.cyclingDataService.addPointToTrip(this.currentTripId!, point);
+          // Reload current trip to get updated statistics
+          this.currentTrip = await this.cyclingDataService.getTrip(this.currentTripId!);
+        } catch (error) {
+          console.error('Error saving point to trip:', error);
+        }
 
         if (forceRecord) {
           console.log(`📍 Forced recording: ${this.isMoving ? 'Moving' : 'Stationary'} point`);
@@ -401,60 +401,40 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     );
   }
 
-  formatDistance(distanceInMeters: number): string {
-    if (distanceInMeters < 1000) {
-      return `${Math.round(distanceInMeters)}m`;
-    } else {
-      return `${(distanceInMeters / 1000).toFixed(2)}km`;
+  async clearAllData() {
+    if (confirm('Are you sure you want to clear all trip data? This cannot be undone.')) {
+      try {
+        await this.cyclingDataService.clearAllTrips();
+        this.points = [];
+        this.pointCounter = 1;
+        this.currentTrip = null;
+        this.currentTripId = null;
+        this.allTrips = [];
+        this.totalDistanceAllTrips = 0;
+
+        // Create new trip for today
+        await this.loadOrCreateTodaysTrip();
+      } catch (error) {
+        console.error('Error clearing all data:', error);
+      }
     }
   }
 
-  formatTotalDistance(): string {
-    return this.formatDistance(this.totalDistance);
-  }
-
-  formatCurrentTripDistance(): string {
-    return this.formatDistance(this.getCurrentTripDistance());
-  }
-
-  // Get average speed for current trip
-  getCurrentTripAverageSpeed(): number {
-    if (!this.isRecording || this.recordingDuration === 0) {
-      return 0;
+  async clearTodaysTrip() {
+    if (confirm('Are you sure you want to clear today\'s trip data?')) {
+      if (this.currentTripId) {
+        try {
+          await this.cyclingDataService.deleteTrip(this.currentTripId);
+          this.points = [];
+          this.pointCounter = 1;
+          await this.loadOrCreateTodaysTrip();
+          await this.loadAllTrips();
+        } catch (error) {
+          console.error('Error clearing today\'s trip:', error);
+        }
+      }
     }
-
-    const distanceKm = this.getCurrentTripDistance() / 1000;
-    const timeHours = this.recordingDuration / 3600;
-
-    return timeHours > 0 ? distanceKm / timeHours : 0;
   }
-
-  formatAverageSpeed(): string {
-    return `${this.getCurrentTripAverageSpeed().toFixed(1)} km/h`;
-  }
-
-  // Get comprehensive trip statistics
-  getTripStats(): {
-    totalDistance: string;
-    currentTripDistance: string;
-    averageSpeed: string;
-    maxSpeed: string;
-    recordingTime: string;
-    pointsRecorded: number;
-  } {
-    const maxSpeedMps = Math.max(...this.points.map(p => p.speed || 0));
-    const maxSpeedKmh = maxSpeedMps > 0 ? maxSpeedMps * 3.6 : 0;
-
-    return {
-      totalDistance: this.formatTotalDistance(),
-      currentTripDistance: this.formatCurrentTripDistance(),
-      averageSpeed: this.formatAverageSpeed(),
-      maxSpeed: `${maxSpeedKmh.toFixed(1)} km/h`,
-      recordingTime: this.formatDuration(this.recordingDuration),
-      pointsRecorded: this.points.length
-    };
-  }
-
 
   // Settings methods
   setMovementThreshold(threshold: number): void {
@@ -472,13 +452,55 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     }
   }
 
-  getRecordingStats(): { totalPoints: number, movingPoints: number, stationaryPoints: number } {
-    // This is a simplified calculation - in a real app you'd track this more precisely
+  // Distance and statistics methods
+  getCurrentTripDistance(): number {
+    return this.currentTrip?.totalDistance || 0;
+  }
+
+  getTotalDistance(): number {
+    const completedTripsDistance = this.totalDistanceAllTrips;
+    const currentTripDistance = this.getCurrentTripDistance();
+    return completedTripsDistance + currentTripDistance;
+  }
+
+  getCurrentTripAverageSpeed(): number {
+    return this.currentTrip?.averageSpeed || 0;
+  }
+
+  getCurrentTripMaxSpeed(): number {
+    if (!this.currentTrip?.maxSpeed) return 0;
+    return this.currentTrip.maxSpeed * 3.6; // Convert m/s to km/h
+  }
+
+  getRecordingStats(): {
+    totalPoints: number;
+    tripPoints: number;
+    allTripsCount: number;
+    completedTrips: number;
+  } {
     return {
-      totalPoints: this.points.length,
-      movingPoints: Math.floor(this.points.length * 0.8), // Estimate
-      stationaryPoints: Math.floor(this.points.length * 0.2) // Estimate
+      totalPoints: this.allTrips.reduce((sum, trip) => sum + trip.points.length, 0),
+      tripPoints: this.points.length,
+      allTripsCount: this.allTrips.length,
+      completedTrips: this.allTrips.filter(trip => trip.isCompleted).length
     };
+  }
+
+  // Formatting methods
+  formatDistance(distanceInMeters: number): string {
+    if (distanceInMeters < 1000) {
+      return `${Math.round(distanceInMeters)}m`;
+    } else {
+      return `${(distanceInMeters / 1000).toFixed(2)}km`;
+    }
+  }
+
+  formatTotalDistance(): string {
+    return this.formatDistance(this.getTotalDistance());
+  }
+
+  formatCurrentTripDistance(): string {
+    return this.formatDistance(this.getCurrentTripDistance());
   }
 
   formatSpeed(speed: number | null): string {
@@ -501,6 +523,42 @@ export class ItineraryComponent implements OnInit, OnDestroy {
 
   formatCurrentSpeed(): string {
     return `${this.currentSpeed.toFixed(1)} km/h`;
+  }
+
+  formatAverageSpeed(): string {
+    return `${this.getCurrentTripAverageSpeed().toFixed(1)} km/h`;
+  }
+
+  formatMaxSpeed(): string {
+    return `${this.getCurrentTripMaxSpeed().toFixed(1)} km/h`;
+  }
+
+  // Get comprehensive trip statistics
+  getTripStats(): {
+    totalDistance: string;
+    currentTripDistance: string;
+    averageSpeed: string;
+    maxSpeed: string;
+    recordingTime: string;
+    pointsRecorded: number;
+    allTripsCount: number;
+  } {
+    return {
+      totalDistance: this.formatTotalDistance(),
+      currentTripDistance: this.formatCurrentTripDistance(),
+      averageSpeed: this.formatAverageSpeed(),
+      maxSpeed: this.formatMaxSpeed(),
+      recordingTime: this.formatDuration(this.recordingDuration),
+      pointsRecorded: this.points.length,
+      allTripsCount: this.allTrips.length
+    };
+  }
+
+  // Get recent trips for display
+  getRecentTrips(limit: number = 5): CyclingTrip[] {
+    return this.allTrips
+      .filter(trip => trip.isCompleted)
+      .slice(0, limit);
   }
 
   ngOnDestroy() {
