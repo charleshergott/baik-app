@@ -42,16 +42,17 @@ export class ItineraryComponent implements OnInit, OnDestroy {
   private stationaryStartTime = 0;
   private stationaryInterval: any;
 
+  // Distance tracking properties
+  totalDistance = 0; // Total distance in meters
+  currentTripDistance = 0; // Distance for current recording session
+  private tripStartPointIndex = 0; // Index where current trip started
+
   ngOnInit() {
     this.checkGpsAvailability();
     this.loadSavedItinerary();
   }
 
-  ngOnDestroy() {
-    this.stopRecording();
-    this.stopWatchingPosition();
-    this.stopStationaryTimer();
-  }
+
 
   private checkGpsAvailability() {
     this.gpsAvailable = 'geolocation' in navigator;
@@ -67,9 +68,68 @@ export class ItineraryComponent implements OnInit, OnDestroy {
           timestamp: new Date(p.timestamp)
         }));
         this.pointCounter = this.points.length > 0 ? Math.max(...this.points.map(p => p.id)) + 1 : 1;
+
+        // Calculate total distance from saved points
+        this.calculateTotalDistance();
+        this.currentTripDistance = 0; // Reset trip distance on load
+        this.tripStartPointIndex = this.points.length;
       } catch (e) {
         console.error('Error loading saved itinerary:', e);
       }
+    }
+  }
+
+  private calculateTotalDistance(): void {
+    this.totalDistance = 0;
+
+    for (let i = 1; i < this.points.length; i++) {
+      const prevPoint = this.points[i - 1];
+      const currentPoint = this.points[i];
+
+      const distance = this.calculateDistance(
+        prevPoint.latitude,
+        prevPoint.longitude,
+        currentPoint.latitude,
+        currentPoint.longitude
+      );
+
+      this.totalDistance += distance;
+    }
+  }
+
+  getCurrentTripDistance(): number {
+    if (!this.isRecording || this.tripStartPointIndex >= this.points.length) {
+      return this.currentTripDistance;
+    }
+
+    let tripDistance = 0;
+
+    // Calculate from trip start to current position
+    for (let i = this.tripStartPointIndex + 1; i < this.points.length; i++) {
+      const prevPoint = this.points[i - 1];
+      const currentPoint = this.points[i];
+
+      const distance = this.calculateDistance(
+        prevPoint.latitude,
+        prevPoint.longitude,
+        currentPoint.latitude,
+        currentPoint.longitude
+      );
+
+      tripDistance += distance;
+    }
+
+    return tripDistance;
+  }
+
+  clearItinerary() {
+    if (confirm('Are you sure you want to clear all recorded points?')) {
+      this.points = [];
+      this.pointCounter = 1;
+      this.totalDistance = 0;
+      this.currentTripDistance = 0;
+      this.tripStartPointIndex = 0;
+      this.saveItinerary();
     }
   }
 
@@ -94,6 +154,10 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     this.currentSpeed = 0;
     this.isMoving = false;
     this.speedHistory = [];
+
+    // Mark the start of current trip for distance calculation
+    this.tripStartPointIndex = this.points.length;
+    this.currentTripDistance = 0;
 
     // Start watching position for real-time updates and movement detection
     this.startWatchingPosition();
@@ -301,6 +365,24 @@ export class ItineraryComponent implements OnInit, OnDestroy {
           accuracy: position.coords.accuracy
         };
 
+        // Calculate distance from previous point
+        if (this.points.length > 0) {
+          const lastPoint = this.points[this.points.length - 1];
+          const distance = this.calculateDistance(
+            lastPoint.latitude,
+            lastPoint.longitude,
+            point.latitude,
+            point.longitude
+          );
+
+          this.totalDistance += distance;
+
+          // Add to current trip distance if we're recording
+          if (this.isRecording) {
+            this.currentTripDistance += distance;
+          }
+        }
+
         this.points.push(point);
         this.saveItinerary();
 
@@ -319,13 +401,60 @@ export class ItineraryComponent implements OnInit, OnDestroy {
     );
   }
 
-  clearItinerary() {
-    if (confirm('Are you sure you want to clear all recorded points?')) {
-      this.points = [];
-      this.pointCounter = 1;
-      this.saveItinerary();
+  formatDistance(distanceInMeters: number): string {
+    if (distanceInMeters < 1000) {
+      return `${Math.round(distanceInMeters)}m`;
+    } else {
+      return `${(distanceInMeters / 1000).toFixed(2)}km`;
     }
   }
+
+  formatTotalDistance(): string {
+    return this.formatDistance(this.totalDistance);
+  }
+
+  formatCurrentTripDistance(): string {
+    return this.formatDistance(this.getCurrentTripDistance());
+  }
+
+  // Get average speed for current trip
+  getCurrentTripAverageSpeed(): number {
+    if (!this.isRecording || this.recordingDuration === 0) {
+      return 0;
+    }
+
+    const distanceKm = this.getCurrentTripDistance() / 1000;
+    const timeHours = this.recordingDuration / 3600;
+
+    return timeHours > 0 ? distanceKm / timeHours : 0;
+  }
+
+  formatAverageSpeed(): string {
+    return `${this.getCurrentTripAverageSpeed().toFixed(1)} km/h`;
+  }
+
+  // Get comprehensive trip statistics
+  getTripStats(): {
+    totalDistance: string;
+    currentTripDistance: string;
+    averageSpeed: string;
+    maxSpeed: string;
+    recordingTime: string;
+    pointsRecorded: number;
+  } {
+    const maxSpeedMps = Math.max(...this.points.map(p => p.speed || 0));
+    const maxSpeedKmh = maxSpeedMps > 0 ? maxSpeedMps * 3.6 : 0;
+
+    return {
+      totalDistance: this.formatTotalDistance(),
+      currentTripDistance: this.formatCurrentTripDistance(),
+      averageSpeed: this.formatAverageSpeed(),
+      maxSpeed: `${maxSpeedKmh.toFixed(1)} km/h`,
+      recordingTime: this.formatDuration(this.recordingDuration),
+      pointsRecorded: this.points.length
+    };
+  }
+
 
   // Settings methods
   setMovementThreshold(threshold: number): void {
@@ -372,5 +501,11 @@ export class ItineraryComponent implements OnInit, OnDestroy {
 
   formatCurrentSpeed(): string {
     return `${this.currentSpeed.toFixed(1)} km/h`;
+  }
+
+  ngOnDestroy() {
+    this.stopRecording();
+    this.stopWatchingPosition();
+    this.stopStationaryTimer();
   }
 }

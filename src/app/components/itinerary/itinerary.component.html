@@ -21,9 +21,18 @@
                 <span class="data-label">Altitude</span>
                 <span class="data-value">{{ formatAltitude(currentPosition.coords.altitude) }}</span>
             </div>
-            <div class="data-item">
+            <!-- <div class="data-item">
                 <span class="data-label">Accuracy</span>
                 <span class="data-value">{{ currentPosition.coords.accuracy.toFixed(1) }}m</span>
+            </div> -->
+            <div class="stat-card">
+                <h3>Total Distance</h3>
+                <p class="stat-value">{{ formatTotalDistance() }}</p>
+            </div>
+
+            <div class="stat-card" *ngIf="isRecording">
+                <h3>Trip Distance</h3>
+                <p class="stat-value">{{ formatCurrentTripDistance() }}</p>
             </div>
         </div>
     </div>
@@ -48,9 +57,7 @@
                         <span class="detail-item">
                             <strong>⛰️</strong> {{ formatAltitude(point.altitude) }}
                         </span>
-                        <span class="detail-item">
-                            <strong>📡</strong> {{ point.accuracy.toFixed(1) }}m
-                        </span>
+
                     </div>
                 </div>
             </div>
@@ -58,10 +65,48 @@
 
         <ng-template #noPoints>
             <div class="empty-state">
+                <span class="detail-item" *ngFor="let point of points; let i = index">
+                    <strong>📡</strong> {{ point.accuracy.toFixed(1) }}m
+                </span>
                 <p>No points recorded yet.</p>
-                <p>{{ gpsAvailable ? 'Press "Start Recording" to begin tracking.' : 'GPS is not available on this
+                <p>{{ gpsAvailable ? 'Recording will start and stop automatically with movement' : 'GPS is not available
+                    on this
                     device.' }}</p>
             </div>
         </ng-template>
+
+        <div class="recording-status" [class.recording]="isRecording">
+            <div class="status-indicator">
+                <span class="status-dot" [class.active]="isRecording"></span>
+                {{ getMovementStatus() }}
+            </div>
+            <div *ngIf="isRecording" class="recording-time">
+                {{ formatDuration(recordingDuration) }}
+            </div>
+        </div>
+
+        <!-- Detailed Stats (expandable section) -->
+        <div class="detailed-stats" *ngIf="points.length > 0">
+            <h4>Trip Summary</h4>
+            <div class="stats-list">
+                <div class="stats-row">
+                    <span>Points Recorded:</span>
+                    <span>{{ getTripStats().pointsRecorded }}</span>
+                </div>
+                <div class="stats-row">
+                    <span>Recording Time:</span>
+                    <span>{{ getTripStats().recordingTime }}</span>
+                </div>
+                <div class="stats-row">
+                    <span>Max Speed:</span>
+                    <span>{{ getTripStats().maxSpeed }}</span>
+                </div>
+                <div class="stats-row" *ngIf="isRecording">
+                    <span>Current Trip:</span>
+                    <span>{{ getTripStats().currentTripDistance }}</span>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
