@@ -49,7 +49,6 @@ export class HomeComponent {
 
   constructor(
     private gpsService: GpsService,
-    private navigationService: NavigationService,
     private alertService: AlertService,
   ) {
     this.checkIfMobile();
@@ -63,21 +62,16 @@ export class HomeComponent {
 
   ngAfterViewInit(): void {
     this.initializeMap();
-
+    this.updateMapWithWaypoints();
     // Start GPS tracking immediately
     this.gpsService.startTracking();
     this.alertService.requestNotificationPermission();
 
     // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
-
-
   }
 
 
-
-
-  // Check if device is mobile
   checkIfMobile() {
     this.isMobile = window.innerWidth <= 768;
   }
@@ -98,14 +92,6 @@ export class HomeComponent {
         this.startTrackingUserPosition();
       }
     });
-  }
-
-  get isDevelopmentMode(): boolean {
-    return environment.showDevControls;
-  }
-
-  get isUsingMockGPS(): boolean {
-    return environment.enableMockGPS;
   }
 
   private startTrackingUserPosition(): void {
@@ -158,7 +144,7 @@ export class HomeComponent {
     }
   }
 
-  // Handle map click to create new waypoint with info window
+
   onMapClick(lat: number, lng: number, screenPosition: any) {
     if (this.activeWaypoint) {
       this.closeInfoWindow(); // Close any open info window first
@@ -232,7 +218,7 @@ export class HomeComponent {
     this.closeInfoWindow();
   }
 
-  // Delete active waypoint
+
   async deleteActiveWaypoint() {
     if (this.isNewWaypoint || this.activeWaypointIndex < 0) return;
 
@@ -241,7 +227,7 @@ export class HomeComponent {
 
   }
 
-  // Close info window
+
   closeInfoWindow() {
     this.activeWaypoint = null;
     this.activeWaypointIndex = -1;
@@ -670,53 +656,7 @@ export class HomeComponent {
     }
   }
 
-  async loadRoute(): Promise<void> {
-    console.log('🛫 Load Route button clicked!');
 
-    if (!this.canLoadRoute()) return;
-
-    const route: Route = {
-      id: this.generateId(),
-      name: 'Current Flight',
-      waypoints: this.waypoints,
-      cruiseAltitude: 3000,
-      cruiseSpeed: 120,
-      createdAt: new Date()
-    };
-
-    this.navigationService.setRoute(route);
-    this.createDefaultAlerts(this.waypoints);
-    this.routeLoaded = true;
-
-    console.log('📍 Route created:', route);
-
-    try {
-      console.log('🗂️ Setting route in navigation service...');
-      this.navigationService.setRoute(route);
-      console.log('✅ Route set successfully');
-    } catch (error) {
-      console.error('❌ Error setting route:', error);
-    }
-
-    try {
-      console.log('🚨 Creating alerts...');
-      this.createDefaultAlerts(this.waypoints);
-      console.log('✅ Alerts created successfully');
-    } catch (error) {
-      console.error('❌ Error creating alerts:', error);
-    }
-
-    console.log('✅ Setting routeLoaded to true');
-    this.routeLoaded = true;
-
-    setTimeout(() => {
-      console.log('⏰ Hiding success message');
-      // Don't set to false anymore, let it persist
-      // this.routeLoaded = false;
-    }, 3000);
-  }
-
-  // Save current flight plan as a reusable route
   async saveCurrentRouteAs(name: string, description?: string): Promise<void> {
     if (!this.hasValidWaypoints()) {
       alert('Please add some waypoints with names before saving the route.');
@@ -733,87 +673,8 @@ export class HomeComponent {
 
   }
 
-  private createDefaultAlerts(waypoints: Waypoint[]): void {
-    waypoints.forEach(waypoint => {
-      const alert: FlightAlert = {
-        id: this.generateId(),
-        type: 'waypoint',
-        message: `Approaching ${waypoint.name} - 2 nautical miles`,
-        triggerDistance: 2,
-        waypointId: waypoint.id,
-        isActive: true,
-        triggered: false
-      };
-      this.alertService.addAlert(alert);
-
-      if (waypoint.frequency) {
-        const freqAlert: FlightAlert = {
-          id: this.generateId(),
-          type: 'waypoint',
-          message: `Tune to ${waypoint.frequency} for ${waypoint.name}`,
-          triggerDistance: 5,
-          waypointId: waypoint.id,
-          isActive: true,
-          triggered: false
-        };
-        this.alertService.addAlert(freqAlert);
-      }
-    });
-  }
-
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
-  }
-
-  setMockSpeed(speedKnots: number): void {
-    // This would require adding a method to GPS service to adjust mock speed
-    console.log(`Setting mock speed to ${speedKnots} knots`);
-  }
-
-  async addTestRoute(): Promise<void> {
-    // Clear existing waypoints
-    await this.clearAllWaypoints();
-
-    // Add test waypoints for development
-    const testWaypoints = [
-      {
-        id: 'test1',
-        name: 'START',
-        latitude: 40.7580,
-        longitude: -73.9855,
-        altitudeQNH: 3000,
-        speedKnots: 120,
-        frequency: '118.7',
-        estimatedArrival: '',
-        routingDegrees: 0
-      },
-      {
-        id: 'test2',
-        name: 'MID',
-        latitude: 40.8176,
-        longitude: -73.7782,
-        altitudeQNH: 3500,
-        speedKnots: 120,
-        frequency: '119.1',
-        estimatedArrival: '',
-        routingDegrees: 0
-      },
-      {
-        id: 'test3',
-        name: 'END',
-        latitude: 40.8848,
-        longitude: -73.5764,
-        altitudeQNH: 3000,
-        speedKnots: 120,
-        frequency: '120.5',
-        estimatedArrival: '',
-        routingDegrees: 0
-      }
-    ];
-
-    this.waypoints = testWaypoints;
-    this.updateMapWithWaypoints();
-    await this.loadRoute();
   }
 
   // Handle window resize for mobile detection

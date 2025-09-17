@@ -44,6 +44,7 @@
         <div class="watch-display">
             <div class="current-time">{{getCurrentTime()}}</div>
             <!-- <div class="current-date">{{getCurrentDate()}}</div> -->
+            <small>v.2.170925</small>
         </div>
 
         <!-- Analog Watch (Optional) -->
@@ -53,7 +54,7 @@
                 <div class="minute-hand" [style.transform]="'rotate(' + getMinuteAngle() + 'deg)'"></div>
                 <div class="second-hand" [style.transform]="'rotate(' + getSecondAngle() + 'deg)'"></div>
                 <div class="center-dot"></div>
-                               <div class="hour-marker" *ngFor="let hour of [1,2,3,4,5,6,7,8,9,10,11,12]"
+                <div class="hour-marker" *ngFor="let hour of [1,2,3,4,5,6,7,8,9,10,11,12]"
                     [style.transform]="'rotate(' + (hour * 30) + 'deg)'">
                     <div class="marker-line"></div>
                 </div>
@@ -72,4 +73,5 @@
             </div>
         </div> -->
     </div>
+
 </div>
