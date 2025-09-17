@@ -16,5 +16,5 @@ import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 
 export class AppComponent {
 
-  title = 'baik-app';
+  title = 'your-bike-app';
 }

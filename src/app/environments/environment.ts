@@ -6,13 +6,13 @@ export const environment = {
     enableMockGPS: true,  // Enable mock GPS in development
     showDevControls: true,
 
-    // firebase: {
-    //     apiKey: "AIzaSyDlZhSiv7ewHi6t-WziTL_8sujYrrpKVXg",
-    //     authDomain: "vfr-navaid.firebaseapp.com",
-    //     projectId: "vfr-navaid",
-    //     storageBucket: "vfr-navaid.firebasestorage.app",
-    //     messagingSenderId: "693186524571",
-    //     appId: "1:693186524571:web:e36e474bef1a4d5e3f5d3e",
-    //     measurementId: "G-RWXSWV8L4X"
-    // },
+    firebase: {
+        apiKey: "AIzaSyDkS-R-3DnLnq8gnen49HA5fExHKYlt1QI",
+        authDomain: "your-bike-app.firebaseapp.com",
+        projectId: "your-bike-app",
+        storageBucket: "your-bike-app.firebasestorage.app",
+        messagingSenderId: "627999643957",
+        appId: "1:627999643957:web:dbeda32bf9dcbb0769947c",
+        measurementId: "G-6WKMSFN9G4"
+    },
 };
