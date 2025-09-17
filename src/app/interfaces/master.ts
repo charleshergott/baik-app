@@ -72,3 +72,25 @@ export interface NavigationData {
     groundSpeed: number; // knots
     estimatedTimeToNext: number; // minutes
 }
+
+export interface MovementState {
+    isMoving: boolean;
+    speed: number; // km/h
+    position: GeolocationPosition | null;
+    quality: 'good' | 'poor' | 'very_poor';
+    isStationary: boolean;
+    accuracy: number;
+    lastUpdate: number;
+}
+
+export interface MovementConfig {
+    startThreshold: number; // km/h
+    stopThreshold: number; // km/h
+    stopDelay: number; // ms
+    minAccuracy: number; // meters
+    minDistance: number; // meters
+    minTimeBetweenReadings: number; // ms
+    maxSpeedJump: number; // km/h
+    stationaryRadius: number; // meters
+    historyLength: number;
+}

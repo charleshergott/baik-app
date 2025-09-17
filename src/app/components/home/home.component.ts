@@ -1,11 +1,12 @@
 import { Component, HostListener } from '@angular/core';
-import { SavedRoute, Waypoint } from '../../interfaces/master';
+import { MovementState, SavedRoute, Waypoint } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
 import { AlertService } from '../../services/alert.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { filter, take } from 'rxjs';
+import { filter, Subscription, take } from 'rxjs';
 import { ChronometerComponent } from '../chronometer copy/chronometer.component';
+import { UnifiedMovementService } from '../../services/unified-movement.service';
 
 
 declare var L: any;
@@ -42,6 +43,9 @@ export class HomeComponent {
   private actualPathColor = '#ff6b35'; // Orange for actual path
   private offRouteColor = '#dc3545'; // Red when off route
 
+  private movementSubscription?: Subscription;
+  private movementState: MovementState | null = null;
+
   waypoints: Waypoint[] = [];
   gpsEnabled = true;
   hasGpsSignal = false;
@@ -73,6 +77,7 @@ export class HomeComponent {
   constructor(
     private gpsService: GpsService,
     private alertService: AlertService,
+    private _movementService: UnifiedMovementService
   ) {
     this.checkIfMobile();
 
@@ -92,6 +97,269 @@ export class HomeComponent {
 
     // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
+
+    // Initialize unified movement tracking
+    this.initializeMovementTracking();
+    this.alertService.requestNotificationPermission();
+  }
+
+  private async initializeMovementTracking(): Promise<void> {
+    try {
+      // Subscribe to movement state changes
+      this.movementSubscription = this._movementService.getMovementState().subscribe(
+        (state: MovementState) => this.handleMovementStateChange(state)
+      );
+
+      // Start GPS tracking through unified service
+      await this._movementService.startTracking();
+      this.hasGpsSignal = true;
+      console.log('🗺️ Map movement tracking initialized');
+
+      // Initial map centering when GPS connects
+      this.centerOnFirstGPSSignal();
+
+    } catch (error) {
+      console.error('❌ Failed to initialize map movement tracking:', error);
+      this.hasGpsSignal = false;
+    }
+  }
+
+  /**
+   * Handle movement state changes
+   */
+  private handleMovementStateChange(state: MovementState): void {
+    this.movementState = state;
+    this.hasGpsSignal = state.quality !== 'very_poor';
+
+    // Update user location marker
+    if (state.position) {
+      this.showUserLocationOnMap({
+        latitude: state.position.coords.latitude,
+        longitude: state.position.coords.longitude
+      });
+    }
+
+    // Process for route tracking if active
+    if (this.isTracking && state.position && state.isMoving) {
+      this.processTrackingPosition({
+        latitude: state.position.coords.latitude,
+        longitude: state.position.coords.longitude
+      });
+    }
+  }
+
+  /**
+   * Center map on first GPS signal with smooth animation
+   */
+  private centerOnFirstGPSSignal(): void {
+    // Wait for first valid GPS position
+    const subscription = this._movementService.getMovementState().subscribe(state => {
+      if (state.position && state.quality !== 'very_poor') {
+        console.log('📍 First GPS signal - centering map');
+
+        this.map.flyTo([
+          state.position.coords.latitude,
+          state.position.coords.longitude
+        ], 16, {
+          animate: true,
+          duration: 2.5,
+          easeLinearity: 0.25
+        });
+
+        subscription.unsubscribe(); // Only center once
+      }
+    });
+  }
+
+  // Update existing methods to use unified service
+
+  /**
+   * Start tracking the cycling route
+   */
+  startRouteTracking(): void {
+    if (!this.hasValidWaypoints()) {
+      alert('Please create a route with waypoints before starting tracking.');
+      return;
+    }
+
+    if (!this.hasGpsSignal) {
+      alert('GPS signal required to start tracking.');
+      return;
+    }
+
+    this.isTracking = true;
+    this.trackingStartTime = new Date();
+    this.currentWaypointTarget = 0;
+    this.actualPath = [];
+
+    // Clear any existing tracking visualization
+    this.clearTrackingVisualization();
+
+    // Initialize route visualization for tracking
+    this.initializeTrackingVisualization();
+
+    // Configure movement service for route tracking
+    this._movementService.updateConfig({
+      minAccuracy: 12, // Slightly more lenient for route tracking
+      minDistance: 3,
+      minTimeBetweenReadings: 1500
+    });
+
+    console.log('🚴 Route tracking started');
+    this.alertService.requestNotificationPermission();
+  }
+
+  /**
+   * Stop tracking the cycling route
+   */
+  stopRouteTracking(): void {
+    this.isTracking = false;
+    this.trackingStartTime = null;
+
+    // Reset movement service to default config
+    this._movementService.updateConfig({
+      minAccuracy: 15,
+      minDistance: 5,
+      minTimeBetweenReadings: 2000
+    });
+
+    console.log('🚴 Route tracking stopped');
+  }
+
+  /**
+   * Process GPS position for route tracking (simplified)
+   */
+  private processTrackingPosition(position: { latitude: number, longitude: number }): void {
+    if (!this.isTracking || !this.movementState) return;
+
+    const currentPos = (L as any).latLng(position.latitude, position.longitude);
+
+    // Add to actual path if movement is detected and we have good GPS
+    if (this.movementState.isMoving && this.movementState.quality !== 'very_poor') {
+      // Check if we should record this position (avoid too frequent updates)
+      if (this.shouldRecordPosition(position)) {
+        this.actualPath.push(currentPos);
+        this.updateActualPathVisualization();
+        this.lastPosition = position;
+      }
+
+    }
+  }
+
+  /**
+   * Determine if position should be recorded
+   */
+  private shouldRecordPosition(position: { latitude: number, longitude: number }): boolean {
+    if (!this.lastPosition) return true;
+
+    const distance = this.calculateDistanceMeters(
+      this.lastPosition.latitude, this.lastPosition.longitude,
+      position.latitude, position.longitude
+    );
+
+    // Record if moved at least 8 meters (reduce noise)
+    return distance > 8;
+  }
+
+  /**
+   * Manual centering with animation
+   */
+  centerOnCurrentPosition(): void {
+    if (!this.hasGpsSignal) {
+      alert('GPS signal not available. Please wait for GPS to connect.');
+      return;
+    }
+
+    if (this.movementState?.position) {
+      console.log('📍 Manual centering on current position with smooth animation');
+
+      this.map.flyTo([
+        this.movementState.position.coords.latitude,
+        this.movementState.position.coords.longitude
+      ], 16, {
+        animate: true,
+        duration: 1.5,
+        easeLinearity: 0.25
+      });
+    }
+  }
+
+  /**
+   * Get current GPS quality for UI display
+   */
+  getGPSQualityInfo(): { quality: string, color: string, description: string } {
+    if (!this.movementState) {
+      return {
+        quality: 'UNKNOWN',
+        color: '#6c757d',
+        description: 'GPS initializing...'
+      };
+    }
+
+    switch (this.movementState.quality) {
+      case 'good':
+        return {
+          quality: 'GOOD',
+          color: '#28a745',
+          description: `Accurate GPS signal (${this.movementState.accuracy.toFixed(1)}m)`
+        };
+      case 'poor':
+        return {
+          quality: 'FAIR',
+          color: '#ffc107',
+          description: `GPS signal present (${this.movementState.accuracy.toFixed(1)}m accuracy)`
+        };
+      case 'very_poor':
+        return {
+          quality: 'POOR',
+          color: '#dc3545',
+          description: `GPS too weak (${this.movementState.accuracy.toFixed(1)}m accuracy)`
+        };
+    }
+  }
+
+  /**
+   * Get current movement info for UI
+   */
+  getCurrentMovementInfo(): {
+    speed: number,
+    isMoving: boolean,
+    isStationary: boolean,
+    quality: string
+  } {
+    if (!this.movementState) {
+      return {
+        speed: 0,
+        isMoving: false,
+        isStationary: true,
+        quality: 'unknown'
+      };
+    }
+
+    return {
+      speed: this.movementState.speed,
+      isMoving: this.movementState.isMoving,
+      isStationary: this.movementState.isStationary,
+      quality: this.movementState.quality
+    };
+  }
+
+  /**
+   * Enable indoor mode for testing
+   */
+  setIndoorMode(enabled: boolean): void {
+    this._movementService.setIndoorMode(enabled);
+  }
+
+  /**
+   * Get debug information
+   */
+  getMovementDebugInfo(): any {
+    return {
+      movementState: this.movementState,
+      tracking: this.isTracking,
+      serviceDebug: this._movementService.getDebugInfo()
+    };
   }
 
 
@@ -690,46 +958,6 @@ export class HomeComponent {
   }
 
 
-
-  startRouteTracking(): void {
-    if (!this.hasValidWaypoints()) {
-      alert('Please create a route with waypoints before starting tracking.');
-      return;
-    }
-
-    if (!this.hasGpsSignal) {
-      alert('GPS signal required to start tracking.');
-      return;
-    }
-
-    this.isTracking = true;
-    this.trackingStartTime = new Date();
-    this.currentWaypointTarget = 0;
-    this.actualPath = [];
-    this.lastPosition = null;
-
-    // Clear any existing tracking visualization
-    this.clearTrackingVisualization();
-
-    // Initialize route visualization for tracking
-    this.initializeTrackingVisualization();
-
-    console.log('🚴 Route tracking started');
-
-    // Request notification permission for waypoint alerts
-    this.alertService.requestNotificationPermission();
-  }
-
-  stopRouteTracking(): void {
-    this.isTracking = false;
-    this.trackingStartTime = null;
-
-    console.log('🚴 Route tracking stopped');
-
-    // Optionally keep the actual path visible or clear it
-    // this.clearTrackingVisualization();
-  }
-
   private initializeTrackingVisualization(): void {
     if (this.waypoints.length < 2) return;
 
@@ -806,29 +1034,6 @@ export class HomeComponent {
     });
   }
 
-  private processTrackingPosition(position: { latitude: number, longitude: number }): void {
-    const currentPos = L.latLng(position.latitude, position.longitude);
-
-    // Add to actual path if we've moved enough (avoid GPS jitter)
-    if (this.shouldRecordPosition(position)) {
-      this.actualPath.push(currentPos);
-      this.updateActualPathVisualization();
-      this.lastPosition = position;
-    }
-
-  }
-
-  private shouldRecordPosition(position: { latitude: number, longitude: number }): boolean {
-    if (!this.lastPosition) return true;
-
-    const distance = this.calculateDistanceMeters(
-      this.lastPosition.latitude, this.lastPosition.longitude,
-      position.latitude, position.longitude
-    );
-
-    // Only record if moved at least 5 meters
-    return distance > 5;
-  }
 
   private updateActualPathVisualization(): void {
     if (this.actualPath.length < 2) return;

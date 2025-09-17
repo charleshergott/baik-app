@@ -1,5 +1,43 @@
 <div class="home-container">
 
+    <div class="unified-movement-status" [ngClass]="getGPSQualityInfo().quality.toLowerCase()">
+        <div class="status-header">
+            <i class="fas fa-satellite-dish"></i>
+            <span class="status-title">GPS & Movement</span>
+            <span class="status-badge" [style.color]="getGPSQualityInfo().color">
+                {{ getGPSQualityInfo().quality }}
+            </span>
+        </div>
+
+        <!-- <div class="status-details">
+            <div class="movement-info">
+                <div class="speed-display">
+                    <span class="speed-value">{{ getCurrentMovementInfo().speed | number:'1.1-1' }}</span>
+                    <span class="speed-unit">km/h</span>
+                </div>
+
+                <div class="movement-state" [ngClass]="{
+                 'moving': getCurrentMovementInfo().isMoving,
+                 'stationary': getCurrentMovementInfo().isStationary,
+                 'stopped': !getCurrentMovementInfo().isMoving && !getCurrentMovementInfo().isStationary
+               }">
+                    {{ getCurrentMovementInfo().isMoving ? 'MOVING' :
+                    getCurrentMovementInfo().isStationary ? 'STATIONARY' : 'STOPPED' }}
+                </div>
+            </div>
+
+            <div class="gps-info">
+                <small>{{ getGPSQualityInfo().description }}</small>
+            </div>
+        </div> -->
+
+        <!-- Debug info (show only in development) -->
+        <!-- <details class="debug-info" *ngIf="true"> 
+            <summary>Movement Debug</summary>
+            <pre>{{ getMovementDebugInfo() | json }}</pre>
+        </details> -->
+    </div>
+
     <div class="map-wrapper">
 
         <app-chronometer></app-chronometer>
