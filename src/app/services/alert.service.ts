@@ -67,7 +67,7 @@ export class AlertService {
     this.activeAlert$.next(null);
   }
 
-  private showNotification(message: string): void {
+  showNotification(message: string): void {
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification('VFR Navigation Alert', { body: message });
     }

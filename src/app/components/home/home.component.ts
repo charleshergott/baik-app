@@ -1,12 +1,10 @@
 import { Component, HostListener } from '@angular/core';
-import { FlightAlert, Route, SavedRoute, Waypoint } from '../../interfaces/master';
+import { SavedRoute, Waypoint } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
-import { NavigationService } from '../../services/navigation.service';
 import { AlertService } from '../../services/alert.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { filter, take } from 'rxjs';
-import { environment } from '../../environments/environment.prod';
 import { ChronometerComponent } from '../chronometer copy/chronometer.component';
 
 
@@ -24,6 +22,26 @@ declare var L: any;
 })
 
 export class HomeComponent {
+
+  // New properties for route tracking
+  private actualPath: L.LatLng[] = []; // User's actual cycling path
+  private actualPathLine: any = null; // Polyline showing where user has been
+  private completedRouteLine: any = null; // Completed portions of planned route
+  private remainingRouteLine: any = null; // Remaining portions of planned route
+  private isTracking = false; // Whether route tracking is active
+  private trackingStartTime: Date | null = null;
+  private lastPosition: { latitude: number, longitude: number } | null = null;
+
+  // Route progress tracking
+  private currentWaypointTarget = 0; // Index of next waypoint to reach
+  private waypointReachDistance = 50; // meters - distance to consider waypoint "reached"
+  private routeDeviationThreshold = 100; // meters - distance to consider "off route"
+
+  // Visual settings for route tracking
+  private completedRouteColor = '#28a745'; // Green for completed
+  private remainingRouteColor = '#6c757d'; // Gray for remaining
+  private actualPathColor = '#ff6b35'; // Orange for actual path
+  private offRouteColor = '#dc3545'; // Red when off route
 
   waypoints: Waypoint[] = [];
   gpsEnabled = true;
@@ -94,18 +112,6 @@ export class HomeComponent {
     });
   }
 
-  private startTrackingUserPosition(): void {
-    // Continuously update user position marker WITHOUT moving the map
-    this.gpsService.getCurrentPosition().subscribe(position => {
-      if (position && this.map) {
-        // ONLY update the marker, never call setView()
-        this.showUserLocationOnMap(position);
-
-        // Update GPS signal status
-        this.hasGpsSignal = true;
-      }
-    });
-  }
 
   // Keep this method for manual centering
   centerOnCurrentPosition(): void {
@@ -681,6 +687,515 @@ export class HomeComponent {
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
     this.checkIfMobile();
+  }
+
+  startRouteTracking(): void {
+    if (!this.hasValidWaypoints()) {
+      alert('Please create a route with waypoints before starting tracking.');
+      return;
+    }
+
+    if (!this.hasGpsSignal) {
+      alert('GPS signal required to start tracking.');
+      return;
+    }
+
+    this.isTracking = true;
+    this.trackingStartTime = new Date();
+    this.currentWaypointTarget = 0;
+    this.actualPath = [];
+    this.lastPosition = null;
+
+    // Clear any existing tracking visualization
+    this.clearTrackingVisualization();
+
+    // Initialize route visualization for tracking
+    this.initializeTrackingVisualization();
+
+    console.log('🚴 Route tracking started');
+
+    // Request notification permission for waypoint alerts
+    this.alertService.requestNotificationPermission();
+  }
+
+  /**
+   * Stop tracking the cycling route
+   */
+  stopRouteTracking(): void {
+    this.isTracking = false;
+    this.trackingStartTime = null;
+
+    console.log('🚴 Route tracking stopped');
+
+    // Optionally keep the actual path visible or clear it
+    // this.clearTrackingVisualization();
+  }
+
+  /**
+   * Initialize route visualization for tracking mode
+   */
+  private initializeTrackingVisualization(): void {
+    if (this.waypoints.length < 2) return;
+
+    // Remove the standard route line
+    if (this.routeLine) {
+      if (this.routeLine.distanceLabels) {
+        this.routeLine.distanceLabels.forEach((label: any) => this.map.removeLayer(label));
+      }
+      this.map.removeLayer(this.routeLine);
+      this.routeLine = null;
+    }
+
+    // Create separate lines for completed and remaining route
+    this.updateRouteProgress();
+  }
+
+  /**
+   * Update route progress visualization
+   */
+  private updateRouteProgress(): void {
+    if (!this.isTracking || this.waypoints.length < 2) return;
+
+    // Remove existing progress lines
+    if (this.completedRouteLine) {
+      this.map.removeLayer(this.completedRouteLine);
+      this.completedRouteLine = null;
+    }
+    if (this.remainingRouteLine) {
+      this.map.removeLayer(this.remainingRouteLine);
+      this.remainingRouteLine = null;
+    }
+
+    // Create completed route (from start to current target waypoint)
+    if (this.currentWaypointTarget > 0) {
+      const completedCoordinates = this.waypoints
+        .slice(0, this.currentWaypointTarget + 1)
+        .map(wp => [wp.latitude, wp.longitude]);
+
+      this.completedRouteLine = L.polyline(completedCoordinates, {
+        color: this.completedRouteColor,
+        weight: 4,
+        opacity: 0.8,
+        lineJoin: 'round',
+        lineCap: 'round'
+      }).addTo(this.map);
+    }
+
+    // Create remaining route (from current target to end)
+    if (this.currentWaypointTarget < this.waypoints.length - 1) {
+      const remainingCoordinates = this.waypoints
+        .slice(this.currentWaypointTarget)
+        .map(wp => [wp.latitude, wp.longitude]);
+
+      this.remainingRouteLine = L.polyline(remainingCoordinates, {
+        color: this.remainingRouteColor,
+        weight: 3,
+        opacity: 0.6,
+        dashArray: '10, 5',
+        lineJoin: 'round',
+        lineCap: 'round'
+      }).addTo(this.map);
+    }
+  }
+
+  /**
+   * Enhanced position tracking with route progress
+   */
+  private startTrackingUserPosition(): void {
+    this.gpsService.getCurrentPosition().subscribe(position => {
+      if (position && this.map) {
+        // Update user location marker
+        this.showUserLocationOnMap(position);
+        this.hasGpsSignal = true;
+
+        // If tracking is active, process the position for route tracking
+        if (this.isTracking) {
+          this.processTrackingPosition(position);
+        }
+      }
+    });
+  }
+
+  /**
+   * Process GPS position for route tracking
+   */
+  private processTrackingPosition(position: { latitude: number, longitude: number }): void {
+    const currentPos = L.latLng(position.latitude, position.longitude);
+
+    // Add to actual path if we've moved enough (avoid GPS jitter)
+    if (this.shouldRecordPosition(position)) {
+      this.actualPath.push(currentPos);
+      this.updateActualPathVisualization();
+      this.lastPosition = position;
+    }
+
+    // Check waypoint proximity
+    this.checkWaypointProximity(position);
+
+    // Check route deviation
+    this.checkRouteDeviation(position);
+  }
+
+  /**
+   * Determine if position should be recorded (reduce GPS noise)
+   */
+  private shouldRecordPosition(position: { latitude: number, longitude: number }): boolean {
+    if (!this.lastPosition) return true;
+
+    const distance = this.calculateDistanceMeters(
+      this.lastPosition.latitude, this.lastPosition.longitude,
+      position.latitude, position.longitude
+    );
+
+    // Only record if moved at least 5 meters
+    return distance > 5;
+  }
+
+  /**
+   * Update the actual path visualization
+   */
+  private updateActualPathVisualization(): void {
+    if (this.actualPath.length < 2) return;
+
+    // Remove existing actual path line
+    if (this.actualPathLine) {
+      this.map.removeLayer(this.actualPathLine);
+    }
+
+    // Create new actual path line
+    this.actualPathLine = L.polyline(this.actualPath, {
+      color: this.actualPathColor,
+      weight: 4,
+      opacity: 0.9,
+      lineJoin: 'round',
+      lineCap: 'round'
+    }).addTo(this.map);
+
+    // Bring user location marker to front
+    if (this.userLocationMarker) {
+      this.userLocationMarker.bringToFront();
+    }
+  }
+
+  /**
+   * Check if user is close to the next waypoint
+   */
+  private checkWaypointProximity(position: { latitude: number, longitude: number }): void {
+    if (this.currentWaypointTarget >= this.waypoints.length) return;
+
+    const targetWaypoint = this.waypoints[this.currentWaypointTarget];
+    const distance = this.calculateDistanceMeters(
+      position.latitude, position.longitude,
+      targetWaypoint.latitude, targetWaypoint.longitude
+    );
+
+    if (distance <= this.waypointReachDistance) {
+      this.waypointReached(this.currentWaypointTarget);
+    }
+  }
+
+  /**
+   * Handle waypoint reached
+   */
+  private waypointReached(waypointIndex: number): void {
+    const waypoint = this.waypoints[waypointIndex];
+
+    console.log(`🎯 Waypoint ${waypointIndex + 1} reached: ${waypoint.name}`);
+
+    // Show notification
+    this.alertService.showNotification(`Waypoint reached! You've arrived at ${waypoint.name || `Waypoint ${waypointIndex + 1}`}`);
+
+    // Update waypoint marker to show completion
+    this.updateWaypointMarkerAsCompleted(waypointIndex);
+
+    // Move to next waypoint
+    this.currentWaypointTarget++;
+
+    // Update route progress visualization
+    this.updateRouteProgress();
+
+    // Check if route is complete
+    if (this.currentWaypointTarget >= this.waypoints.length) {
+      this.routeCompleted();
+    }
+  }
+
+  /**
+   * Update waypoint marker to show it's been reached
+   */
+  private updateWaypointMarkerAsCompleted(index: number): void {
+    const marker = this.markers[index];
+    if (marker) {
+      const completedIcon = this.createCompletedWaypointIcon(index + 1);
+      marker.setIcon(completedIcon);
+    }
+  }
+
+  /**
+   * Create icon for completed waypoint
+   */
+  private createCompletedWaypointIcon(number: number): any {
+    return L.icon({
+      iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+          <!-- Marker background -->
+          <path d="M16 2C10.486 2 6 6.486 6 12c0 8 10 18 10 18s10-10 10-18c0-5.514-4.486-10-10-10z" 
+                fill="#28a745" stroke="#fff" stroke-width="1.5"/>
+          
+          <!-- Checkmark circle background -->
+          <circle cx="16" cy="12" r="8" fill="#fff" stroke="#28a745" stroke-width="1"/>
+          
+          <!-- Checkmark -->
+          <path d="M12 12l2 2 4-4" stroke="#28a745" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `),
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+  }
+
+  /**
+   * Check if user has deviated from the planned route
+   */
+  private checkRouteDeviation(position: { latitude: number, longitude: number }): void {
+    if (this.currentWaypointTarget >= this.waypoints.length - 1) return;
+
+    const currentWaypoint = this.waypoints[this.currentWaypointTarget];
+    const nextWaypoint = this.waypoints[this.currentWaypointTarget + 1];
+
+    // Calculate distance from position to the line between current and next waypoint
+    const distanceToRoute = this.calculateDistanceToLineSegment(
+      position,
+      currentWaypoint,
+      nextWaypoint
+    );
+
+    if (distanceToRoute > this.routeDeviationThreshold) {
+      this.handleRouteDeviation(distanceToRoute);
+    }
+  }
+
+  /**
+   * Handle route deviation
+   */
+  private handleRouteDeviation(distance: number): void {
+    // Update actual path color to indicate deviation
+    if (this.actualPathLine) {
+      this.actualPathLine.setStyle({ color: this.offRouteColor });
+    }
+
+    // Could show a notification or warning here
+    console.log(`⚠️ Off route by ${distance.toFixed(0)} meters`);
+  }
+
+  /**
+   * Handle route completion
+   */
+  private routeCompleted(): void {
+    this.isTracking = false;
+
+    console.log('🏁 Route completed!');
+
+    // Calculate total time and distance
+    const totalTime = this.trackingStartTime ?
+      (new Date().getTime() - this.trackingStartTime.getTime()) / 1000 / 60 : 0; // minutes
+    const actualDistance = this.calculateActualPathDistance();
+
+    this.alertService.showNotification(
+      `Route completed! 🎉 Time: ${totalTime.toFixed(1)} min, Distance: ${(actualDistance / 1000).toFixed(2)} km`
+    );
+  }
+
+  /**
+   * Calculate total distance of actual path traveled
+   */
+  private calculateActualPathDistance(): number {
+    if (this.actualPath.length < 2) return 0;
+
+    let totalDistance = 0;
+    for (let i = 1; i < this.actualPath.length; i++) {
+      const prev = this.actualPath[i - 1];
+      const curr = this.actualPath[i];
+      totalDistance += this.calculateDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+    }
+
+    return totalDistance;
+  }
+
+  /**
+   * Calculate distance between two points in meters
+   */
+  private calculateDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLng = this.toRadians(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Calculate distance from point to line segment
+   */
+  private calculateDistanceToLineSegment(
+    point: { latitude: number, longitude: number },
+    lineStart: Waypoint,
+    lineEnd: Waypoint
+  ): number {
+    const A = point.latitude - lineStart.latitude;
+    const B = point.longitude - lineStart.longitude;
+    const C = lineEnd.latitude - lineStart.latitude;
+    const D = lineEnd.longitude - lineStart.longitude;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+
+    if (lenSq !== 0) {
+      param = dot / lenSq;
+    }
+
+    let xx: number, yy: number;
+
+    if (param < 0) {
+      xx = lineStart.latitude;
+      yy = lineStart.longitude;
+    } else if (param > 1) {
+      xx = lineEnd.latitude;
+      yy = lineEnd.longitude;
+    } else {
+      xx = lineStart.latitude + param * C;
+      yy = lineStart.longitude + param * D;
+    }
+
+    return this.calculateDistanceMeters(point.latitude, point.longitude, xx, yy);
+  }
+
+  /**
+   * Clear all tracking visualization
+   */
+  private clearTrackingVisualization(): void {
+    if (this.actualPathLine) {
+      this.map.removeLayer(this.actualPathLine);
+      this.actualPathLine = null;
+    }
+    if (this.completedRouteLine) {
+      this.map.removeLayer(this.completedRouteLine);
+      this.completedRouteLine = null;
+    }
+    if (this.remainingRouteLine) {
+      this.map.removeLayer(this.remainingRouteLine);
+      this.remainingRouteLine = null;
+    }
+  }
+
+  /**
+   * Get current tracking statistics
+   */
+  getTrackingStats(): any {
+    if (!this.isTracking || !this.trackingStartTime) {
+      return null;
+    }
+
+    const elapsedTime = (new Date().getTime() - this.trackingStartTime.getTime()) / 1000 / 60; // minutes
+    const actualDistance = this.calculateActualPathDistance() / 1000; // km
+    const plannedDistance = this.getTotalRouteDistance() * 1.852; // Convert nautical miles to km
+    const averageSpeed = actualDistance > 0 ? (actualDistance / elapsedTime) * 60 : 0; // km/h
+    const progress = this.waypoints.length > 0 ? (this.currentWaypointTarget / this.waypoints.length) * 100 : 0;
+
+    return {
+      elapsedTime: elapsedTime,
+      actualDistance: actualDistance,
+      plannedDistance: plannedDistance,
+      averageSpeed: averageSpeed,
+      progress: progress,
+      currentWaypoint: this.currentWaypointTarget + 1,
+      totalWaypoints: this.waypoints.length
+    };
+  }
+
+  /**
+   * Get distance from current position to a specific waypoint (for template use)
+   */
+  getDistanceToWaypoint(waypointIndex: number): number {
+    if (waypointIndex >= this.waypoints.length || !this.hasGpsSignal) {
+      return 0;
+    }
+
+    // Get current GPS position
+    let currentDistance = 0;
+    this.gpsService.getCurrentPosition().pipe(take(1)).subscribe(position => {
+      if (position) {
+        const waypoint = this.waypoints[waypointIndex];
+        currentDistance = this.calculateDistanceMeters(
+          position.latitude, position.longitude,
+          waypoint.latitude, waypoint.longitude
+        );
+      }
+    });
+
+    return currentDistance;
+  }
+
+  /**
+   * Toggle tracking mode
+   */
+  toggleTracking(): void {
+    if (this.isTracking) {
+      this.stopRouteTracking();
+    } else {
+      this.startRouteTracking();
+    }
+  }
+
+  /**
+   * Reset route tracking (clear all tracking data)
+   */
+  resetTracking(): void {
+    this.stopRouteTracking();
+    this.clearTrackingVisualization();
+    this.actualPath = [];
+    this.currentWaypointTarget = 0;
+
+    // Reset waypoint markers to original state
+    this.updateAllMarkers();
+
+    // Restore original route visualization
+    if (this.waypoints.length >= 2) {
+      this.updateRouteVisualization();
+    }
+  }
+
+  /**
+   * Export tracking data (useful for analysis)
+   */
+  exportTrackingData(): any {
+    if (this.actualPath.length === 0) {
+      return null;
+    }
+
+    const stats = this.getTrackingStats();
+    const pathCoordinates = this.actualPath.map(point => ({
+      latitude: point.lat,
+      longitude: point.lng
+    }));
+
+    return {
+      route: {
+        waypoints: this.waypoints,
+        plannedDistance: this.getTotalRouteDistance()
+      },
+      tracking: {
+        startTime: this.trackingStartTime,
+        endTime: this.isTracking ? null : new Date(),
+        actualPath: pathCoordinates,
+        statistics: stats
+      }
+    };
   }
 
   ngOnDestroy(): void {
