@@ -23,8 +23,7 @@ declare var L: any;
 
 export class HomeComponent {
 
-  // New properties for route tracking
-  private actualPath: L.LatLng[] = []; // User's actual cycling path
+  private actualPath: any[] = []; // User's actual cycling path (L.LatLng objects)
   private actualPathLine: any = null; // Polyline showing where user has been
   private completedRouteLine: any = null; // Completed portions of planned route
   private remainingRouteLine: any = null; // Remaining portions of planned route
@@ -64,6 +63,12 @@ export class HomeComponent {
 
   // Route line visualization
   private routeLine: any = null;
+
+  // Handle window resize for mobile detection
+  @HostListener('window:resize', ['$event'])
+  onResize(event: any) {
+    this.checkIfMobile();
+  }
 
   constructor(
     private gpsService: GpsService,
@@ -111,7 +116,6 @@ export class HomeComponent {
       }
     });
   }
-
 
   // Keep this method for manual centering
   centerOnCurrentPosition(): void {
@@ -683,11 +687,7 @@ export class HomeComponent {
     return Math.random().toString(36).substr(2, 9);
   }
 
-  // Handle window resize for mobile detection
-  @HostListener('window:resize', ['$event'])
-  onResize(event: any) {
-    this.checkIfMobile();
-  }
+
 
   startRouteTracking(): void {
     if (!this.hasValidWaypoints()) {
@@ -718,9 +718,6 @@ export class HomeComponent {
     this.alertService.requestNotificationPermission();
   }
 
-  /**
-   * Stop tracking the cycling route
-   */
   stopRouteTracking(): void {
     this.isTracking = false;
     this.trackingStartTime = null;
@@ -731,9 +728,6 @@ export class HomeComponent {
     // this.clearTrackingVisualization();
   }
 
-  /**
-   * Initialize route visualization for tracking mode
-   */
   private initializeTrackingVisualization(): void {
     if (this.waypoints.length < 2) return;
 
@@ -750,9 +744,6 @@ export class HomeComponent {
     this.updateRouteProgress();
   }
 
-  /**
-   * Update route progress visualization
-   */
   private updateRouteProgress(): void {
     if (!this.isTracking || this.waypoints.length < 2) return;
 
@@ -798,9 +789,6 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Enhanced position tracking with route progress
-   */
   private startTrackingUserPosition(): void {
     this.gpsService.getCurrentPosition().subscribe(position => {
       if (position && this.map) {
@@ -816,9 +804,6 @@ export class HomeComponent {
     });
   }
 
-  /**
-   * Process GPS position for route tracking
-   */
   private processTrackingPosition(position: { latitude: number, longitude: number }): void {
     const currentPos = L.latLng(position.latitude, position.longitude);
 
@@ -829,16 +814,8 @@ export class HomeComponent {
       this.lastPosition = position;
     }
 
-    // Check waypoint proximity
-    this.checkWaypointProximity(position);
-
-    // Check route deviation
-    this.checkRouteDeviation(position);
   }
 
-  /**
-   * Determine if position should be recorded (reduce GPS noise)
-   */
   private shouldRecordPosition(position: { latitude: number, longitude: number }): boolean {
     if (!this.lastPosition) return true;
 
@@ -851,9 +828,6 @@ export class HomeComponent {
     return distance > 5;
   }
 
-  /**
-   * Update the actual path visualization
-   */
   private updateActualPathVisualization(): void {
     if (this.actualPath.length < 2) return;
 
@@ -877,52 +851,44 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Check if user is close to the next waypoint
-   */
-  private checkWaypointProximity(position: { latitude: number, longitude: number }): void {
-    if (this.currentWaypointTarget >= this.waypoints.length) return;
+  // private checkWaypointProximity(position: { latitude: number, longitude: number }): void {
+  //   if (this.currentWaypointTarget >= this.waypoints.length) return;
 
-    const targetWaypoint = this.waypoints[this.currentWaypointTarget];
-    const distance = this.calculateDistanceMeters(
-      position.latitude, position.longitude,
-      targetWaypoint.latitude, targetWaypoint.longitude
-    );
+  //   const targetWaypoint = this.waypoints[this.currentWaypointTarget];
+  //   const distance = this.calculateDistanceMeters(
+  //     position.latitude, position.longitude,
+  //     targetWaypoint.latitude, targetWaypoint.longitude
+  //   );
 
-    if (distance <= this.waypointReachDistance) {
-      this.waypointReached(this.currentWaypointTarget);
-    }
-  }
+  //   if (distance <= this.waypointReachDistance) {
+  //     this.waypointReached(this.currentWaypointTarget);
+  //   }
+  // }
 
-  /**
-   * Handle waypoint reached
-   */
-  private waypointReached(waypointIndex: number): void {
-    const waypoint = this.waypoints[waypointIndex];
 
-    console.log(`🎯 Waypoint ${waypointIndex + 1} reached: ${waypoint.name}`);
+  // private waypointReached(waypointIndex: number): void {
+  //   const waypoint = this.waypoints[waypointIndex];
 
-    // Show notification
-    this.alertService.showNotification(`Waypoint reached! You've arrived at ${waypoint.name || `Waypoint ${waypointIndex + 1}`}`);
+  //   console.log(`🎯 Waypoint ${waypointIndex + 1} reached: ${waypoint.name}`);
 
-    // Update waypoint marker to show completion
-    this.updateWaypointMarkerAsCompleted(waypointIndex);
+  //   // Show notification
+  //   this.alertService.showNotification(`Waypoint reached! You've arrived at ${waypoint.name || `Waypoint ${waypointIndex + 1}`}`);
 
-    // Move to next waypoint
-    this.currentWaypointTarget++;
+  //   // Update waypoint marker to show completion
+  //   this.updateWaypointMarkerAsCompleted(waypointIndex);
 
-    // Update route progress visualization
-    this.updateRouteProgress();
+  //   // Move to next waypoint
+  //   this.currentWaypointTarget++;
 
-    // Check if route is complete
-    if (this.currentWaypointTarget >= this.waypoints.length) {
-      this.routeCompleted();
-    }
-  }
+  //   // Update route progress visualization
+  //   this.updateRouteProgress();
 
-  /**
-   * Update waypoint marker to show it's been reached
-   */
+  //   // Check if route is complete
+  //   if (this.currentWaypointTarget >= this.waypoints.length) {
+  //     this.routeCompleted();
+  //   }
+  // }
+
   private updateWaypointMarkerAsCompleted(index: number): void {
     const marker = this.markers[index];
     if (marker) {
@@ -931,9 +897,6 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Create icon for completed waypoint
-   */
   private createCompletedWaypointIcon(number: number): any {
     return L.icon({
       iconUrl: 'data:image/svg+xml;base64,' + btoa(`
@@ -958,40 +921,34 @@ export class HomeComponent {
   /**
    * Check if user has deviated from the planned route
    */
-  private checkRouteDeviation(position: { latitude: number, longitude: number }): void {
-    if (this.currentWaypointTarget >= this.waypoints.length - 1) return;
+  // private checkRouteDeviation(position: { latitude: number, longitude: number }): void {
+  //   if (this.currentWaypointTarget >= this.waypoints.length - 1) return;
 
-    const currentWaypoint = this.waypoints[this.currentWaypointTarget];
-    const nextWaypoint = this.waypoints[this.currentWaypointTarget + 1];
+  //   const currentWaypoint = this.waypoints[this.currentWaypointTarget];
+  //   const nextWaypoint = this.waypoints[this.currentWaypointTarget + 1];
 
-    // Calculate distance from position to the line between current and next waypoint
-    const distanceToRoute = this.calculateDistanceToLineSegment(
-      position,
-      currentWaypoint,
-      nextWaypoint
-    );
+  //   // Calculate distance from position to the line between current and next waypoint
+  //   const distanceToRoute = this.calculateDistanceToLineSegment(
+  //     position,
+  //     currentWaypoint,
+  //     nextWaypoint
+  //   );
 
-    if (distanceToRoute > this.routeDeviationThreshold) {
-      this.handleRouteDeviation(distanceToRoute);
-    }
-  }
+  //   if (distanceToRoute > this.routeDeviationThreshold) {
+  //     this.handleRouteDeviation(distanceToRoute);
+  //   }
+  // }
 
-  /**
-   * Handle route deviation
-   */
-  private handleRouteDeviation(distance: number): void {
-    // Update actual path color to indicate deviation
-    if (this.actualPathLine) {
-      this.actualPathLine.setStyle({ color: this.offRouteColor });
-    }
+  // private handleRouteDeviation(distance: number): void {
+  //   // Update actual path color to indicate deviation
+  //   if (this.actualPathLine) {
+  //     this.actualPathLine.setStyle({ color: this.offRouteColor });
+  //   }
 
-    // Could show a notification or warning here
-    console.log(`⚠️ Off route by ${distance.toFixed(0)} meters`);
-  }
+  //   // Could show a notification or warning here
+  //   console.log(`⚠️ Off route by ${distance.toFixed(0)} meters`);
+  // }
 
-  /**
-   * Handle route completion
-   */
   private routeCompleted(): void {
     this.isTracking = false;
 
@@ -1007,9 +964,6 @@ export class HomeComponent {
     );
   }
 
-  /**
-   * Calculate total distance of actual path traveled
-   */
   private calculateActualPathDistance(): number {
     if (this.actualPath.length < 2) return 0;
 
@@ -1023,9 +977,6 @@ export class HomeComponent {
     return totalDistance;
   }
 
-  /**
-   * Calculate distance between two points in meters
-   */
   private calculateDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371000; // Earth's radius in meters
     const dLat = this.toRadians(lat2 - lat1);
@@ -1038,9 +989,6 @@ export class HomeComponent {
     return R * c;
   }
 
-  /**
-   * Calculate distance from point to line segment
-   */
   private calculateDistanceToLineSegment(
     point: { latitude: number, longitude: number },
     lineStart: Waypoint,
@@ -1075,9 +1023,6 @@ export class HomeComponent {
     return this.calculateDistanceMeters(point.latitude, point.longitude, xx, yy);
   }
 
-  /**
-   * Clear all tracking visualization
-   */
   private clearTrackingVisualization(): void {
     if (this.actualPathLine) {
       this.map.removeLayer(this.actualPathLine);
@@ -1093,9 +1038,6 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Get current tracking statistics
-   */
   getTrackingStats(): any {
     if (!this.isTracking || !this.trackingStartTime) {
       return null;
@@ -1121,29 +1063,26 @@ export class HomeComponent {
   /**
    * Get distance from current position to a specific waypoint (for template use)
    */
-  getDistanceToWaypoint(waypointIndex: number): number {
-    if (waypointIndex >= this.waypoints.length || !this.hasGpsSignal) {
-      return 0;
-    }
+  // getDistanceToWaypoint(waypointIndex: number): number {
+  //   if (waypointIndex >= this.waypoints.length || !this.hasGpsSignal) {
+  //     return 0;
+  //   }
 
-    // Get current GPS position
-    let currentDistance = 0;
-    this.gpsService.getCurrentPosition().pipe(take(1)).subscribe(position => {
-      if (position) {
-        const waypoint = this.waypoints[waypointIndex];
-        currentDistance = this.calculateDistanceMeters(
-          position.latitude, position.longitude,
-          waypoint.latitude, waypoint.longitude
-        );
-      }
-    });
+  //   // Get current GPS position
+  //   let currentDistance = 0;
+  //   this.gpsService.getCurrentPosition().pipe(take(1)).subscribe(position => {
+  //     if (position) {
+  //       const waypoint = this.waypoints[waypointIndex];
+  //       currentDistance = this.calculateDistanceMeters(
+  //         position.latitude, position.longitude,
+  //         waypoint.latitude, waypoint.longitude
+  //       );
+  //     }
+  //   });
 
-    return currentDistance;
-  }
+  //   return currentDistance;
+  // }
 
-  /**
-   * Toggle tracking mode
-   */
   toggleTracking(): void {
     if (this.isTracking) {
       this.stopRouteTracking();
@@ -1152,9 +1091,6 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Reset route tracking (clear all tracking data)
-   */
   resetTracking(): void {
     this.stopRouteTracking();
     this.clearTrackingVisualization();
@@ -1170,9 +1106,6 @@ export class HomeComponent {
     }
   }
 
-  /**
-   * Export tracking data (useful for analysis)
-   */
   exportTrackingData(): any {
     if (this.actualPath.length === 0) {
       return null;
