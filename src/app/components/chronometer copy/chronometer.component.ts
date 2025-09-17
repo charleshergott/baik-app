@@ -33,14 +33,30 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   // Speed history for smoothing and stop detection
   private speedHistory: number[] = [];
-  private readonly SPEED_HISTORY_LENGTH = 8; // More samples for stability
   private stoppedDuration = 0; // How long we've been below stop threshold
   private STOP_DELAY = 3000; // 3 seconds below threshold before stopping (ms)
   private lastSpeedCheck = 0;
 
-  // GPS accuracy and reliability
-  private readonly MIN_ACCURACY = 20; // meters - ignore readings worse than this
-  private readonly MIN_TIME_BETWEEN_READINGS = 1000; // ms
+  // Enhanced GPS accuracy and reliability settings
+  private readonly MIN_ACCURACY = 10; // Stricter: 10 meters instead of 20
+  private readonly MIN_TIME_BETWEEN_READINGS = 3000; // 3 seconds instead of 1 second
+  private readonly MAX_REASONABLE_SPEED = 50; // km/h - ignore speeds above this
+  private readonly MIN_DISTANCE_FOR_SPEED = 5; // meters - minimum distance to calculate speed
+
+  // Enhanced stationary detection
+  private readonly STATIONARY_RADIUS = 15; // meters - if all recent positions are within this radius, consider stationary
+  private readonly STATIONARY_SAMPLE_COUNT = 5; // number of positions to check for stationary detection
+  private positionHistory: GeolocationPosition[] = [];
+
+  // Enhanced speed filtering
+  private readonly SPEED_HISTORY_LENGTH = 12; // More samples for better smoothing
+  private readonly MAX_SPEED_JUMP = 10; // km/h - ignore readings that jump more than this
+  private lastValidSpeed = 0;
+
+  // GPS quality monitoring
+  private consecutivePoorReadings = 0;
+  private readonly MAX_POOR_READINGS = 3;
+  private gpsQuality: string = 'poor';
 
   ngOnInit(): void {
     // Auto-start interval for smooth chronometer updates
@@ -85,8 +101,8 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   enableGPSSpeedMonitoring(): void {
     const options: PositionOptions = {
       enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 2000 // Allow slightly older readings for better performance
+      timeout: 15000, // Increased timeout
+      maximumAge: 1000 // Reduced maximum age for fresher readings
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -95,6 +111,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         this.lastPosition = position;
         this.lastPositionTime = Date.now();
         this.lastSpeedCheck = Date.now();
+        this.positionHistory = [position]; // Initialize position history
         console.log('GPS enabled for cycling speed monitoring');
 
         // Start watching position changes
@@ -103,7 +120,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
           (error) => {
             console.error('GPS error:', error);
             this.isGPSEnabled = false;
-            this.startCyclingSpeedSimulation();
+            this.handleGPSError();
           },
           options
         );
@@ -111,23 +128,66 @@ export class ChronometerComponent implements OnInit, OnDestroy {
       (error) => {
         console.error('GPS initialization failed:', error);
         this.isGPSEnabled = false;
-        this.startCyclingSpeedSimulation();
+        this.handleGPSError();
       },
       options
     );
   }
 
+  private handleGPSError(): void {
+    // Reset all GPS-related state
+    this.currentSpeed = 0;
+    this.positionHistory = [];
+    this.speedHistory = [];
+    this.gpsQuality = 'very_poor';
+
+    // Auto-stop chronometer if it was running due to GPS
+    if (this.isRunning && this.autoStartEnabled) {
+      this.autoStopChronometer();
+    }
+
+    // Optionally start simulation for demo/testing
+    // this.startCyclingSpeedSimulation();
+    console.log('GPS tracking disabled due to errors');
+  }
+
   calculateCyclingSpeedFromGPS(position: GeolocationPosition): void {
     const currentTime = Date.now();
 
-    // Check if we have sufficient accuracy
+    // Enhanced accuracy check
     if (position.coords.accuracy > this.MIN_ACCURACY) {
-      console.log(`GPS accuracy too low: ${position.coords.accuracy}m`);
+      this.consecutivePoorReadings++;
+      console.log(`GPS accuracy too low: ${position.coords.accuracy.toFixed(1)}m (need <${this.MIN_ACCURACY}m)`);
+
+      if (this.consecutivePoorReadings >= this.MAX_POOR_READINGS) {
+        this.gpsQuality = 'very_poor';
+        this.currentSpeed = 0; // Set speed to 0 when GPS is unreliable
+        this.updateCyclingSpeed(0);
+      }
       return;
     }
 
+    // Reset poor readings counter on good reading
+    this.consecutivePoorReadings = 0;
+    this.gpsQuality = position.coords.accuracy <= 5 ? 'good' : 'poor';
+
     // Check if enough time has passed
     if (currentTime - this.lastPositionTime < this.MIN_TIME_BETWEEN_READINGS) {
+      return;
+    }
+
+    // Add to position history for stationary detection
+    this.positionHistory.push(position);
+    if (this.positionHistory.length > this.STATIONARY_SAMPLE_COUNT) {
+      this.positionHistory.shift();
+    }
+
+    // Check if we're stationary (all recent positions within a small radius)
+    if (this.isStationary()) {
+      console.log('📍 Detected stationary - setting speed to 0');
+      this.updateCyclingSpeed(0);
+      this.lastPosition = position;
+      this.lastPositionTime = currentTime;
       return;
     }
 
@@ -148,24 +208,74 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         position.coords.longitude
       );
 
-      // Convert to km/h
-      const speedKmh = (distance / timeDiff) * 3.6;
+      // Only calculate speed if we've moved a meaningful distance
+      if (distance < this.MIN_DISTANCE_FOR_SPEED) {
+        console.log(`Distance too small: ${distance.toFixed(1)}m (need >${this.MIN_DISTANCE_FOR_SPEED}m)`);
+        this.updateCyclingSpeed(0);
+        this.lastPosition = position;
+        this.lastPositionTime = currentTime;
+        return;
+      }
 
-      // Use GPS speed if available and reasonable, otherwise use calculated speed
-      let finalSpeed = speedKmh;
+      // Convert to km/h
+      let calculatedSpeed = (distance / timeDiff) * 3.6;
+
+      // Use GPS speed if available and reasonable
       if (position.coords.speed !== null && position.coords.speed >= 0) {
         const gpsSpeedKmh = position.coords.speed * 3.6;
-        // Use GPS speed if it's within reasonable range of calculated speed
-        if (Math.abs(gpsSpeedKmh - speedKmh) < 10) {
-          finalSpeed = gpsSpeedKmh;
+
+        // Use GPS speed if it's reasonable and close to calculated speed
+        if (gpsSpeedKmh <= this.MAX_REASONABLE_SPEED &&
+          Math.abs(gpsSpeedKmh - calculatedSpeed) < 8) {
+          calculatedSpeed = gpsSpeedKmh;
+          console.log(`Using GPS speed: ${gpsSpeedKmh.toFixed(1)} km/h`);
+        } else {
+          console.log(`GPS speed ${gpsSpeedKmh.toFixed(1)} rejected, using calculated ${calculatedSpeed.toFixed(1)} km/h`);
         }
       }
 
-      this.updateCyclingSpeed(finalSpeed);
+      // Filter out unreasonable speeds
+      if (calculatedSpeed > this.MAX_REASONABLE_SPEED) {
+        console.log(`Speed ${calculatedSpeed.toFixed(1)} km/h too high, ignoring`);
+        return;
+      }
+
+      // Filter out sudden speed jumps (likely GPS errors)
+      if (this.lastValidSpeed > 0 &&
+        Math.abs(calculatedSpeed - this.lastValidSpeed) > this.MAX_SPEED_JUMP) {
+        console.log(`Speed jump too large: ${this.lastValidSpeed.toFixed(1)} -> ${calculatedSpeed.toFixed(1)} km/h, ignoring`);
+        return;
+      }
+
+      this.lastValidSpeed = calculatedSpeed;
+      this.updateCyclingSpeed(calculatedSpeed);
+
+      console.log(`Valid speed: ${calculatedSpeed.toFixed(1)} km/h, distance: ${distance.toFixed(1)}m, time: ${timeDiff.toFixed(1)}s, accuracy: ${position.coords.accuracy.toFixed(1)}m`);
 
       this.lastPosition = position;
       this.lastPositionTime = currentTime;
     }
+  }
+
+  private isStationary(): boolean {
+    if (this.positionHistory.length < 3) {
+      return false; // Need at least 3 positions to determine
+    }
+
+    // Calculate the center point of recent positions
+    const centerLat = this.positionHistory.reduce((sum, pos) => sum + pos.coords.latitude, 0) / this.positionHistory.length;
+    const centerLon = this.positionHistory.reduce((sum, pos) => sum + pos.coords.longitude, 0) / this.positionHistory.length;
+
+    // Check if all positions are within the stationary radius
+    const allWithinRadius = this.positionHistory.every(pos => {
+      const distance = this.calculateDistance(
+        centerLat, centerLon,
+        pos.coords.latitude, pos.coords.longitude
+      );
+      return distance <= this.STATIONARY_RADIUS;
+    });
+
+    return allWithinRadius;
   }
 
   calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -235,21 +345,44 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   updateCyclingSpeed(newSpeed: number): void {
     const currentTime = Date.now();
 
+    // Don't update speed if GPS quality is very poor
+    if (this.gpsQuality === 'very_poor') {
+      console.log('GPS quality very poor, not updating speed');
+      return;
+    }
+
     // Add to speed history for smoothing
     this.speedHistory.push(newSpeed);
     if (this.speedHistory.length > this.SPEED_HISTORY_LENGTH) {
       this.speedHistory.shift();
     }
 
-    // Calculate smoothed speed (average of recent readings)
-    const smoothedSpeed = this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
+    // Calculate smoothed speed with weighted average (recent readings count more)
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    for (let i = 0; i < this.speedHistory.length; i++) {
+      const weight = (i + 1) / this.speedHistory.length; // More recent = higher weight
+      weightedSum += this.speedHistory[i] * weight;
+      totalWeight += weight;
+    }
+
+    const smoothedSpeed = totalWeight > 0 ? weightedSum / totalWeight : 0;
     this.currentSpeed = Math.max(0, smoothedSpeed);
 
-    // Auto-start/stop logic with hysteresis and delay
-    if (this.autoStartEnabled) {
+    // Enhanced auto-start/stop logic
+    if (this.autoStartEnabled && this.gpsQuality !== 'very_poor') {
+      // Only start if we have good GPS quality and consistent speed
       if (this.currentSpeed >= this.startThreshold && !this.isRunning) {
-        this.autoStartChronometer();
-        this.stoppedDuration = 0; // Reset stopped duration
+        // Require consistent speed above threshold
+        const recentSpeeds = this.speedHistory.slice(-3); // Last 3 readings
+        const allAboveThreshold = recentSpeeds.length >= 2 &&
+          recentSpeeds.every(speed => speed >= this.startThreshold * 0.8);
+
+        if (allAboveThreshold) {
+          this.autoStartChronometer();
+          this.stoppedDuration = 0;
+        }
       } else if (this.currentSpeed <= this.stopThreshold && this.isRunning) {
         // Start counting how long we've been below threshold
         if (this.stoppedDuration === 0) {
@@ -262,6 +395,65 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         this.stoppedDuration = 0;
       }
     }
+  }
+
+  getGPSQuality(): { quality: string, color: string, description: string } {
+    switch (this.gpsQuality) {
+      case 'good':
+        return {
+          quality: 'GOOD',
+          color: '#28a745',
+          description: 'Accurate GPS signal'
+        };
+      case 'poor':
+        return {
+          quality: 'FAIR',
+          color: '#ffc107',
+          description: 'GPS signal present but less accurate'
+        };
+      case 'very_poor':
+        return {
+          quality: 'POOR',
+          color: '#dc3545',
+          description: 'GPS signal too weak for reliable tracking'
+        };
+      default:
+        return {
+          quality: 'UNKNOWN',
+          color: '#6c757d',
+          description: 'GPS status unknown'
+        };
+    }
+  }
+
+  getCyclingStats(): {
+    distance: number,
+    avgSpeed: number,
+    maxSpeed: number,
+    gpsQuality: string,
+    positionCount: number
+  } {
+    // Calculate approximate distance traveled
+    const timeInHours = this.elapsedTime / (1000 * 60 * 60);
+    const avgSpeed = this.speedHistory.length > 0 ?
+      this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length : 0;
+    const maxSpeed = Math.max(...this.speedHistory, 0);
+    const distance = timeInHours * avgSpeed;
+
+    return {
+      distance: Math.max(0, distance),
+      avgSpeed,
+      maxSpeed,
+      gpsQuality: this.gpsQuality,
+      positionCount: this.positionHistory.length
+    };
+  }
+
+  toggleGPSQuality(): void {
+    const qualities = ['good', 'poor', 'very_poor'] as const;
+    const currentIndex = qualities.indexOf(this.gpsQuality as any);
+    this.gpsQuality = qualities[(currentIndex + 1) % qualities.length];
+    console.log(`GPS quality manually set to: ${this.gpsQuality}`);
   }
 
   autoStartChronometer(): void {
@@ -319,20 +511,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCyclingStats(): { distance: number, avgSpeed: number, maxSpeed: number } {
-    // Calculate approximate distance traveled (very rough estimate)
-    const timeInHours = this.elapsedTime / (1000 * 60 * 60);
-    const avgSpeed = this.speedHistory.length > 0 ?
-      this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length : 0;
-    const maxSpeed = Math.max(...this.speedHistory, 0);
-    const distance = timeInHours * avgSpeed;
-
-    return {
-      distance: Math.max(0, distance),
-      avgSpeed,
-      maxSpeed
-    };
-  }
 
   // Chronometer methods (unchanged)
   startStop(): void {

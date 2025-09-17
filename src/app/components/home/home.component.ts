@@ -117,26 +117,9 @@ export class HomeComponent {
     });
   }
 
-  // Keep this method for manual centering
-  centerOnCurrentPosition(): void {
-    if (!this.hasGpsSignal) {
-      alert('GPS signal not available. Please wait for GPS to connect.');
-      return;
-    }
-
-    this.gpsService.getCurrentPosition().pipe(
-      take(1) // Only center once when button is clicked
-    ).subscribe(position => {
-      if (position && this.map) {
-        console.log('📍 Manual centering on current position');
-        this.map.setView([position.latitude, position.longitude], 12);
-      }
-    });
-  }
-
   private initializeMap(): void {
-    // Initialize map centered on a default location (you can change this)
-    this.map = L.map('map').setView([40.7128, -74.0060], 8); // New York area
+    // Initialize map centered on Geneva, Switzerland
+    this.map = L.map('map').setView([46.2044, 6.1432], 17);
 
     // Add OpenStreetMap tiles (free)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -148,9 +131,36 @@ export class HomeComponent {
       this.onMapClick(e.latlng.lat, e.latlng.lng, e.containerPoint);
     });
 
-    // Try to center on user's location if GPS is available
+    // Try to fly to user's location if GPS is available
     if (this.gpsEnabled && this.hasGpsSignal) {
-      this.centerMapOnUser();
+      this.flyToUserLocation();
+    }
+  }
+
+  private flyToUserLocation(): void {
+    // Get user's current position
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          // Fly to user's location with smooth animation
+          this.map.flyTo([lat, lng], 17, {
+            animate: true,
+            duration: 2.5 // Duration in seconds
+          });
+        },
+        (error) => {
+          console.error('Error getting user location:', error);
+          // Optionally handle error (e.g., show a message to user)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
     }
   }
 
@@ -502,14 +512,6 @@ export class HomeComponent {
 
       marker.setPopupContent(popupContent);
     }
-  }
-
-  private centerMapOnUser(): void {
-    this.gpsService.getCurrentPosition().subscribe(position => {
-      if (position) {
-        this.map.setView([position.latitude, position.longitude], 10);
-      }
-    });
   }
 
   updateWaypointName(index: number, newName: string): void {
