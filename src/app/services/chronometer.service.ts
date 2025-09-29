@@ -19,7 +19,7 @@ export class ChronometerService {
 
   // Speed monitoring properties
   private currentSpeed = 0;
-  private speedThreshold = 1; // knots
+  private speedThreshold = 3; // knots
   private autoStartEnabled = true;
 
   // Time freezing properties
