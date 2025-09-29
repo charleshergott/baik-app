@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+
 import { ChronometerComponent } from './chronometer.component';
-
-
 
 describe('ChronometerComponent', () => {
   let component: ChronometerComponent;
@@ -11,7 +10,7 @@ describe('ChronometerComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ChronometerComponent]
     })
-      .compileComponents();
+    .compileComponents();
 
     fixture = TestBed.createComponent(ChronometerComponent);
     component = fixture.componentInstance;

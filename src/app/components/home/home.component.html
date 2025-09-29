@@ -1,49 +1,121 @@
 <div class="home-container">
 
-    <div class="unified-movement-status" [ngClass]="getGPSQualityInfo().quality.toLowerCase()">
-        <div class="status-header">
-            <i class="fas fa-satellite-dish"></i>
-            <span class="status-title">GPS & Movement</span>
-            <span class="status-badge" [style.color]="getGPSQualityInfo().color">
-                {{ getGPSQualityInfo().quality }}
-            </span>
+    <app-chronometer></app-chronometer>
+
+    <div class="planning-section">
+
+        <!-- Map Section with Info Window -->
+        <div class="map-wrapper">
+
+            <div id="map" class="map-container"></div>
+
+            <!-- Waypoint Info Window (shown when editing) -->
+            <div class="waypoint-info-window" *ngIf="activeWaypoint" [style.left.px]="infoWindowPosition.x"
+                [style.top.px]="infoWindowPosition.y">
+
+                <div class="info-window-header">
+                    <h3>Waypoint {{activeWaypointIndex + 1}}</h3>
+                    <div class="header-buttons">
+                        <button (click)="deleteActiveWaypoint()" class="delete-btn" *ngIf="!isNewWaypoint">🗑️</button>
+                        <button (click)="closeInfoWindow()" class="close-btn">×</button>
+                    </div>
+                </div>
+
+                <div class="info-window-content">
+                    <!-- Waypoint Name -->
+                    <div class="field-group">
+                        <label>Waypoint Name</label>
+                        <input [(ngModel)]="activeWaypoint.name" placeholder="e.g., KNYC, VOR, Airport"
+                            class="waypoint-name">
+                    </div>
+
+                    <!-- Coordinates (read-only display) -->
+                    <div class="field-group">
+                        <label>Coordinates</label>
+                        <div class="coordinates">
+                            {{activeWaypoint.latitude | number:'1.6-6'}} /
+                            {{activeWaypoint.longitude | number:'1.6-6'}}
+                        </div>
+                    </div>
+
+                    <!-- Altitude QNH -->
+                    <div class="field-group">
+                        <label>Altitude QNH (ft)</label>
+                        <input type="number" [(ngModel)]="activeWaypoint.altitudeQNH" placeholder="3000"
+                            class="altitude-input">
+                    </div>
+
+                    <!-- Speed -->
+                    <div class="field-group">
+                        <label>Speed (knots)</label>
+                        <input type="number" [(ngModel)]="activeWaypoint.speedKnots" placeholder="120"
+                            class="speed-input">
+                    </div>
+
+                    <!-- Estimated Arrival (needs to be received programatically -> TO DO)-->
+                    <div class="field-group">
+                        <label>Est. Arrival</label>
+                        <input type="time" [(ngModel)]="activeWaypoint.estimatedArrival" class="time-input">
+                    </div>
+
+                    <!-- Routing Degrees -->
+                    <div class="field-group">
+                        <label>Next Routing (°)</label>
+                        <input type="number" [(ngModel)]="activeWaypoint.routingDegrees" placeholder="270" min="0"
+                            max="359" class="routing-input">
+                    </div>
+
+                    <!-- Required Frequency -->
+                    <div class="field-group">
+                        <label>Req. Frequency</label>
+                        <input [(ngModel)]="activeWaypoint.frequency" placeholder="118.7" class="frequency-input">
+                    </div>
+
+                    <div class="info-window-actions">
+                        <button (click)="saveWaypoint()" class="save-btn">
+                            {{isNewWaypoint ? 'Add Waypoint' : 'Update Waypoint'}}
+                        </button>
+                        <button (click)="cancelWaypoint()" class="cancel-btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- <div class="status-details">
-            <div class="movement-info">
-                <div class="speed-display">
-                    <span class="speed-value">{{ getCurrentMovementInfo().speed | number:'1.1-1' }}</span>
-                    <span class="speed-unit">km/h</span>
-                </div>
+        <!-- Mobile-friendly waypoint summary -->
+        <div class="waypoints-summary" *ngIf="waypoints.length > 0">
+            <!-- <div class="summary-header">
+                <h3>Route: {{waypoints.length}} waypoints</h3>
+                <button (click)="clearAllWaypoints()" class="clear-btn">Clear All</button>
+            </div> -->
 
-                <div class="movement-state" [ngClass]="{
-                 'moving': getCurrentMovementInfo().isMoving,
-                 'stationary': getCurrentMovementInfo().isStationary,
-                 'stopped': !getCurrentMovementInfo().isMoving && !getCurrentMovementInfo().isStationary
-               }">
-                    {{ getCurrentMovementInfo().isMoving ? 'MOVING' :
-                    getCurrentMovementInfo().isStationary ? 'STATIONARY' : 'STOPPED' }}
+            <!-- Compact waypoint list (optional - can be hidden on very small screens) -->
+            <div class="compact-waypoint-list" [class.hidden-mobile]="isMobile">
+                <div *ngFor="let waypoint of waypoints; let i = index" class="compact-waypoint"
+                    (click)="openWaypointInfo(i)">
+                    <span class="waypoint-num">{{i + 1}}</span>
+                    <span class="waypoint-name">{{waypoint.name || 'Unnamed'}}</span>
+                    <span class="waypoint-alt">{{waypoint.altitudeQNH}}ft</span>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="gps-info">
-                <small>{{ getGPSQualityInfo().description }}</small>
+    <div class="flight-controls">
+        <div class="flight-controls">
+            <div class="load-route-btn">
+                <small>v.22.230925</small>
             </div>
-        </div> -->
+        </div>
 
-        <!-- Debug info (show only in development) -->
-        <!-- <details class="debug-info" *ngIf="true"> 
-            <summary>Movement Debug</summary>
-            <pre>{{ getMovementDebugInfo() | json }}</pre>
-        </details> -->
+        <div class="status-message success" *ngIf="routeLoaded">
+            ✓ Route loaded! You can modify waypoints by tapping markers, or switch to Navigation tab.
+        </div>
+
+        <div class="route-status" *ngIf="routeLoaded">
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span>Route active with {{waypoints.length}} waypoints</span>
+            </div>
+        </div>
     </div>
-
-    <div class="map-wrapper">
-
-        <app-chronometer></app-chronometer>
-
-        <div id="map" class="map-container"> </div>
-
-    </div>
-
 </div>

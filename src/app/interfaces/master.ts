@@ -107,3 +107,26 @@ export interface CyclingTrip {
     duration: number; // in seconds
     isCompleted: boolean;
 }
+
+export interface ChronometerState {
+    isRunning: boolean;
+    elapsedTime: number;
+    formattedTime: string;
+    formattedMilliseconds: string;
+    lapTimes: number[];
+    currentSpeed: number;
+    speedThreshold: number;
+    autoStartEnabled: boolean;
+    speedStatus: string;
+    currentTime: string;
+    currentDate: string;
+    currentTimezone: string;
+    utcTime: string;
+    worldTimes: Array<{ city: string, time: string }>;
+    hourAngle: number;
+    minuteAngle: number;
+    secondAngle: number;
+    frozenStartTime: string | null;
+    frozenStopTime: string | null;
+    freezeStep: number;
+}
