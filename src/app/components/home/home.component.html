@@ -9,76 +9,6 @@
 
             <div id="map" class="map-container"></div>
 
-            <!-- Waypoint Info Window (shown when editing) -->
-            <div class="waypoint-info-window" *ngIf="activeWaypoint" [style.left.px]="infoWindowPosition.x"
-                [style.top.px]="infoWindowPosition.y">
-
-                <div class="info-window-header">
-                    <h3>Waypoint {{activeWaypointIndex + 1}}</h3>
-                    <div class="header-buttons">
-                        <button (click)="deleteActiveWaypoint()" class="delete-btn" *ngIf="!isNewWaypoint">🗑️</button>
-                        <button (click)="closeInfoWindow()" class="close-btn">×</button>
-                    </div>
-                </div>
-
-                <div class="info-window-content">
-                    <!-- Waypoint Name -->
-                    <div class="field-group">
-                        <label>Waypoint Name</label>
-                        <input [(ngModel)]="activeWaypoint.name" placeholder="e.g., KNYC, VOR, Airport"
-                            class="waypoint-name">
-                    </div>
-
-                    <!-- Coordinates (read-only display) -->
-                    <div class="field-group">
-                        <label>Coordinates</label>
-                        <div class="coordinates">
-                            {{activeWaypoint.latitude | number:'1.6-6'}} /
-                            {{activeWaypoint.longitude | number:'1.6-6'}}
-                        </div>
-                    </div>
-
-                    <!-- Altitude QNH -->
-                    <div class="field-group">
-                        <label>Altitude QNH (ft)</label>
-                        <input type="number" [(ngModel)]="activeWaypoint.altitudeQNH" placeholder="3000"
-                            class="altitude-input">
-                    </div>
-
-                    <!-- Speed -->
-                    <div class="field-group">
-                        <label>Speed (knots)</label>
-                        <input type="number" [(ngModel)]="activeWaypoint.speedKnots" placeholder="120"
-                            class="speed-input">
-                    </div>
-
-                    <!-- Estimated Arrival (needs to be received programatically -> TO DO)-->
-                    <div class="field-group">
-                        <label>Est. Arrival</label>
-                        <input type="time" [(ngModel)]="activeWaypoint.estimatedArrival" class="time-input">
-                    </div>
-
-                    <!-- Routing Degrees -->
-                    <div class="field-group">
-                        <label>Next Routing (°)</label>
-                        <input type="number" [(ngModel)]="activeWaypoint.routingDegrees" placeholder="270" min="0"
-                            max="359" class="routing-input">
-                    </div>
-
-                    <!-- Required Frequency -->
-                    <div class="field-group">
-                        <label>Req. Frequency</label>
-                        <input [(ngModel)]="activeWaypoint.frequency" placeholder="118.7" class="frequency-input">
-                    </div>
-
-                    <div class="info-window-actions">
-                        <button (click)="saveWaypoint()" class="save-btn">
-                            {{isNewWaypoint ? 'Add Waypoint' : 'Update Waypoint'}}
-                        </button>
-                        <button (click)="cancelWaypoint()" class="cancel-btn">Cancel</button>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Mobile-friendly waypoint summary -->
@@ -88,15 +18,6 @@
                 <button (click)="clearAllWaypoints()" class="clear-btn">Clear All</button>
             </div> -->
 
-            <!-- Compact waypoint list (optional - can be hidden on very small screens) -->
-            <div class="compact-waypoint-list" [class.hidden-mobile]="isMobile">
-                <div *ngFor="let waypoint of waypoints; let i = index" class="compact-waypoint"
-                    (click)="openWaypointInfo(i)">
-                    <span class="waypoint-num">{{i + 1}}</span>
-                    <span class="waypoint-name">{{waypoint.name || 'Unnamed'}}</span>
-                    <span class="waypoint-alt">{{waypoint.altitudeQNH}}ft</span>
-                </div>
-            </div>
         </div>
     </div>
 

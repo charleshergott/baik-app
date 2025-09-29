@@ -14,9 +14,153 @@ $muted-text: #bdc3c7;
     flex-direction: column;
 }
 
-.displays-wrapper {
+
+.speedometer-container {
     display: flex;
-    padding: 5px;
+    justify-content: center;
+    align-items: center;
+    padding-left: 5px;
+    padding-right: 5px
+}
+
+.speedometer {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    min-width: 280px;
+    color: white;
+}
+
+.speed-header {
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+}
+
+.unit-toggle {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+}
+
+.current-speed {
+    text-align: center;
+}
+
+.speed-value {
+    font-size: 4rem;
+    font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.speed-unit {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-left: 0.5rem;
+    opacity: 0.9;
+}
+
+.speed-stats {
+    display: flex;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    gap: 35px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.distance-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+}
+
+.distance-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.distance-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .displays-wrapper {
+        flex-direction: column;
+    }
+
+    .speedometer {
+        min-width: 100%;
+        max-width: 100%;
+    }
+
+    .speed-value {
+        font-size: 3rem;
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
+    }
+}
+
+@media (max-width: 480px) {
+
+    .speed-value {
+        font-size: 2.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.65rem;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+    }
 }
 
 .chronometer {
@@ -26,7 +170,7 @@ $muted-text: #bdc3c7;
     border-radius: 12px;
     color: #fff;
     font-family: 'Courier New', monospace;
-    width: 50%;
+    margin-top: 15px;
     max-height: 100px;
 }
 
@@ -465,9 +609,6 @@ $muted-text: #bdc3c7;
 
 
 @media (max-width: 768px) {
-    .time-instruments-container {
-        gap: 5px;
-    }
 
     .main-time {
         font-size: 2rem;

@@ -219,9 +219,7 @@ export class HomeComponent {
     // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
 
-    this.startGPSTracking();
   }
-
 
   checkIfMobile() {
     this.isMobile = window.innerWidth <= 768;
@@ -257,7 +255,6 @@ export class HomeComponent {
       }
     });
   }
-
 
   centerOnCurrentPosition(): void {
     if (!this.hasGpsSignal) {
@@ -295,12 +292,7 @@ export class HomeComponent {
     }
   }
 
-
   onMapClick(lat: number, lng: number, screenPosition: any) {
-    if (this.activeWaypoint) {
-      this.closeInfoWindow(); // Close any open info window first
-      return;
-    }
 
     // Create new waypoint
     const newWaypoint: Waypoint = {
@@ -328,281 +320,6 @@ export class HomeComponent {
   }
 
 
-  openWaypointInfo(index: number) {
-    this.activeWaypoint = { ...this.waypoints[index] };
-    this.activeWaypointIndex = index;
-    this.isNewWaypoint = false;
-
-    // Position info window (get marker screen position)
-    const marker = this.markers[index];
-    if (marker) {
-      const screenPos = this.getMarkerScreenPosition(marker);
-      this.infoWindowPosition = {
-        x: Math.min(screenPos.x - 150, window.innerWidth - 320),
-        y: Math.max(screenPos.y - 100, 10)
-      };
-    }
-  }
-
-
-  async saveWaypoint() {
-    if (!this.activeWaypoint) return;
-
-    if (this.isNewWaypoint) {
-      // Add new waypoint
-      this.waypoints.push({ ...this.activeWaypoint });
-      this.addMarkerToMap(this.activeWaypoint, this.waypoints.length - 1);
-    } else {
-      // Update existing waypoint
-      this.waypoints[this.activeWaypointIndex] = { ...this.activeWaypoint };
-      this.updateMapMarker(this.activeWaypointIndex);
-      // Update route line after waypoint update
-      this.updateRouteVisualization();
-    }
-
-    this.closeInfoWindow();
-
-  }
-
-  cancelWaypoint() {
-    this.closeInfoWindow();
-  }
-
-  async deleteActiveWaypoint() {
-    if (this.isNewWaypoint || this.activeWaypointIndex < 0) return;
-
-    this.closeInfoWindow();
-  }
-
-  closeInfoWindow() {
-    this.activeWaypoint = null;
-    this.activeWaypointIndex = -1;
-    this.isNewWaypoint = false;
-  }
-
-  private addMarkerToMap(waypoint: Waypoint, index: number): void {
-    // Create a numbered marker icon
-    const numberedIcon = this.createNumberedMarkerIcon(index + 1);
-    const marker = L.marker([waypoint.latitude, waypoint.longitude], {
-      icon: numberedIcon,
-      draggable: true
-    }).addTo(this.map);
-
-    // Create floating name label if name exists
-    if (waypoint.name) {
-      const nameIcon = this.createNameLabelIcon(waypoint.name, waypoint.altitudeQNH);
-      const labelMarker = L.marker([waypoint.latitude, waypoint.longitude], {
-        icon: nameIcon,
-        interactive: false  // Don't intercept clicks
-      }).addTo(this.map);
-
-      // Store both markers for cleanup
-      this.markers.push(marker, labelMarker);
-    } else {
-      this.markers.push(marker);
-    }
-
-    const popupContent = `
-      <strong>Waypoint ${index + 1}: ${waypoint.name || 'Unnamed'}</strong><br>
-      ${waypoint.altitudeQNH ? `${waypoint.altitudeQNH}ft` : 'No altitude'}<br>
-      ${waypoint.speedKnots ? `${waypoint.speedKnots}kts` : 'No speed'}<br>
-      <small>Lat: ${waypoint.latitude.toFixed(6)}, Lng: ${waypoint.longitude.toFixed(6)}</small>
-    `;
-
-    marker.bindPopup(popupContent);
-
-    // Add click event to open info window
-    marker.on('click', () => this.openWaypointInfo(index));
-
-    // Handle marker drag
-    marker.on('dragend', async (e: any) => {
-      const newPos = e.target.getLatLng();
-      this.waypoints[index].latitude = newPos.lat;
-      this.waypoints[index].longitude = newPos.lng;
-
-      // Update route line after drag
-      this.updateRouteVisualization();
-
-    });
-
-    this.markers.push(marker);
-
-    // Update route line
-    this.updateRouteVisualization();
-  }
-
-  private createNameLabelIcon(name: string, altitudeQNH?: number): L.Icon {
-    const svgContent = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="50" height="24" viewBox="0 0 120 24">
-        <rect x="1" y="1" width="118" height="22" rx="4" ry="4" 
-              fill="rgba(255,255,255,0.95)" stroke="#2563eb" stroke-width=".5"/>
-        <text x="60" y="15" text-anchor="middle" font-family="Arial,sans-serif" 
-              font-size="11" font-weight="bold" fill="#1e40af">${name}, ${altitudeQNH}</text>
-      </svg>
-    `;
-
-    return L.icon({
-      iconUrl: `data:image/svg+xml,${encodeURIComponent(svgContent)}`,
-      iconSize: [100, 24],
-      iconAnchor: [80, 50], // Position above the main marker
-      className: 'name-label'
-    });
-  }
-
-
-  private createNumberedMarkerIcon(number: number): any {
-    const color = this.getWaypointColor(number);
-
-    return L.icon({
-      iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-          <!-- Marker background -->
-          <path d="M16 2C10.486 2 6 6.486 6 12c0 8 10 18 10 18s10-10 10-18c0-5.514-4.486-10-10-10z" 
-                fill="${color}" stroke="#fff" stroke-width="1.5"/>
-          
-          <!-- Number circle background -->
-          <circle cx="16" cy="12" r="8" fill="#fff" stroke="${color}" stroke-width="1"/>
-          
-          <!-- Number text -->
-          <text x="16" y="17" text-anchor="middle" 
-                font-family="Arial, sans-serif" 
-                font-size="10" 
-                font-weight="bold" 
-                fill="${color}">${number}</text>
-        </svg>
-      `),
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -32]
-    });
-  }
-
-
-  private getWaypointColor(number: number): string {
-    if (number === 1) return '#28a745'; // Green for start
-    if (number === this.waypoints.length) return '#dc3545'; // Red for end
-    return '#007bff'; // Blue for intermediate waypoints
-  }
-
-
-  private updateRouteVisualization(): void {
-    // Remove existing route line
-    if (this.routeLine) {
-      this.map.removeLayer(this.routeLine);
-      this.routeLine = null;
-    }
-
-    // Remove existing distance labels
-    this.clearDistanceLabels();
-
-    // Only draw line if we have 2 or more waypoints
-    if (this.waypoints.length < 2) return;
-
-    // Create array of coordinates for the polyline
-    const routeCoordinates: L.LatLngExpression[] = this.waypoints.map(wp => [wp.latitude, wp.longitude]);
-
-    // Create the route line
-    this.routeLine = L.polyline(routeCoordinates, {
-      color: '#007bff',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '10, 5', // Dashed line
-      lineJoin: 'round',
-      lineCap: 'round'
-    }).addTo(this.map);
-
-    // Add distance labels along the route
-    this.addDistanceLabels();
-
-    console.log(`📏 Route line updated with ${this.waypoints.length} waypoints`);
-  }
-
-  private clearDistanceLabels(): void {
-    if (this.distanceLabels && this.distanceLabels.length > 0) {
-      this.distanceLabels.forEach((label: L.Marker) => {
-        this.map.removeLayer(label);
-      });
-      this.distanceLabels = [];
-    }
-  }
-
-  private addDistanceLabels(): void {
-    // Clear any existing labels first
-    this.clearDistanceLabels();
-
-    console.log('🏷️ Creating distance labels:');
-
-    for (let i = 0; i < this.waypoints.length - 1; i++) {
-      const wp1 = this.waypoints[i];
-      const wp2 = this.waypoints[i + 1];
-
-      // Calculate distance between waypoints (in nautical miles)
-      const distance = this.calculateDistance(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
-
-      // Calculate midpoint for label placement
-      const midLat = (wp1.latitude + wp2.latitude) / 2;
-      const midLng = (wp1.longitude + wp2.longitude) / 2;
-
-      // Calculate bearing
-      const bearing = this.calculateBearing(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
-
-      // Log what we're about to pass to createDistanceLabel
-      console.log(`  Label ${i + 1}: ${wp1.name || 'WP' + (i + 1)} → ${wp2.name || 'WP' + (i + 2)}`);
-      console.log(`    Using wp2.frequency: "${wp2.frequency || 'NONE'}"`);
-
-      // Create distance label with destination waypoint's frequency
-      const distanceLabel = L.marker([midLat, midLng], {
-        icon: this.createDistanceLabel(distance, bearing, wp2.frequency || '')
-      }).addTo(this.map);
-
-      this.distanceLabels.push(distanceLabel);
-    }
-  }
-
-  private createDistanceLabel(distance: number, bearing: number, frequency?: string): L.Icon {
-    // Pre-calculate text values to avoid template literal issues
-    const distanceText = distance.toFixed(1);
-    const bearingText = bearing.toFixed(0);
-    const timeToWaypoint = this.getTimeToNextWaypoint();
-    const frequencyText = frequency || '';
-
-    // Build SVG string with four-line layout
-    const svgContent =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="64" viewBox="0 0 100 64">' +
-      // Background with subtle shadow
-      '<defs>' +
-      '<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' +
-      '<feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="rgba(0,0,0,0.2)"/>' +
-      '</filter>' +
-      '</defs>' +
-      // Main background rectangle
-      '<rect x="2" y="2" width="96" height="60" rx="6" ry="6" ' +
-      'fill="rgba(255,255,255,0.95)" stroke="#2563eb" stroke-width="1.5" filter="url(#shadow)"/>' +
-      // Distance (main value) - Line 1
-      '<text x="50" y="16" text-anchor="middle" font-family="Arial,sans-serif" ' +
-      'font-size="14" font-weight="bold" fill="#1e40af">' + distanceText + ' nm</text>' +
-      // Bearing - Line 2
-      '<text x="50" y="30" text-anchor="middle" font-family="Arial,sans-serif" ' +
-      'font-size="10" fill="#6b7280">' + bearingText + '°</text>' +
-      // Time - Line 3
-      '<text x="50" y="42" text-anchor="middle" font-family="Arial,sans-serif" ' +
-      'font-size="10" fill="#6b7280">' + timeToWaypoint + 's</text>' +
-      // Frequency - Line 4 (only if frequency exists)
-      (frequencyText ? '<text x="50" y="56" text-anchor="middle" font-family="Arial,sans-serif" ' +
-        'font-size="10" fill="#6b7280">' + frequencyText + '</text>' : '') +
-      '</svg>';
-
-    // Use encodeURIComponent for better encoding
-    const encodedSvg = encodeURIComponent(svgContent);
-
-    return L.icon({
-      iconUrl: `data:image/svg+xml,${encodedSvg}`,
-      iconSize: [100, 64],  // Match the SVG dimensions
-      iconAnchor: [50, 32], // Center the icon (half of width, half of height)
-      className: 'distance-label'
-    });
-  }
-
 
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 3440.065; // Nautical miles
@@ -614,22 +331,6 @@ export class HomeComponent {
       Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-  }
-
-
-  private calculateBearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const dLng = this.toRadians(lng2 - lng1);
-    const lat1Rad = this.toRadians(lat1);
-    const lat2Rad = this.toRadians(lat2);
-
-    const y = Math.sin(dLng) * Math.cos(lat2Rad);
-    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng);
-
-    let bearing = Math.atan2(y, x);
-    bearing = bearing * (180 / Math.PI);
-    bearing = (bearing + 360) % 360;
-
-    return bearing;
   }
 
 
@@ -674,27 +375,6 @@ export class HomeComponent {
   }
 
 
-  updateMapMarker(index: number) {
-    const marker = this.markers[index];
-    const waypoint = this.waypoints[index];
-
-    if (marker) {
-      // Update marker icon with correct number and color
-      const numberedIcon = this.createNumberedMarkerIcon(index + 1);
-      marker.setIcon(numberedIcon);
-
-      // Update marker popup content
-      const popupContent = `
-        <strong>Waypoint ${index + 1}: ${waypoint.name || 'Unnamed'}</strong><br>
-        ${waypoint.altitudeQNH ? `${waypoint.altitudeQNH}ft` : 'No altitude'}<br>
-        ${waypoint.speedKnots ? `${waypoint.speedKnots}kts` : 'No speed'}<br>
-        <small>Lat: ${waypoint.latitude.toFixed(6)}, Lng: ${waypoint.longitude.toFixed(6)}</small>
-      `;
-
-      marker.setPopupContent(popupContent);
-    }
-  }
-
   private centerMapOnUser(): void {
     this.gpsService.getCurrentPosition().subscribe(position => {
       if (position) {
@@ -703,67 +383,14 @@ export class HomeComponent {
     });
   }
 
-  updateMarkerIndices() {
-    this.markers.forEach((marker, index) => {
-      if (marker) {
-        const waypoint = this.waypoints[index];
-
-        // Update marker icon with new number and color
-        const numberedIcon = this.createNumberedMarkerIcon(index + 1);
-        marker.setIcon(numberedIcon);
-
-        // Remove old click listener and add new one with correct index
-        marker.off('click');
-        marker.on('click', () => this.openWaypointInfo(index));
-
-        // Update popup content with new index
-        const popupContent = `
-          <strong>Waypoint ${index + 1}: ${waypoint.name || 'Unnamed'}</strong><br>
-          ${waypoint.altitudeQNH ? `${waypoint.altitudeQNH}ft` : 'No altitude'}<br>
-          ${waypoint.speedKnots ? `${waypoint.speedKnots}kts` : 'No speed'}<br>
-          <small>Lat: ${waypoint.latitude.toFixed(6)}, Lng: ${waypoint.longitude.toFixed(6)}</small>
-        `;
-        marker.setPopupContent(popupContent);
-      }
-    });
-  }
-
-
   getMarkerScreenPosition(marker: any): { x: number, y: number } {
     const point = this.map.latLngToContainerPoint(marker.getLatLng());
     return { x: point.x, y: point.y };
   }
 
-  private updateMapWithWaypoints(): void {
-    // Clear existing markers and route line
-    this.markers.forEach(marker => this.map.removeLayer(marker));
-    this.markers = [];
-
-    if (this.routeLine) {
-      // Remove distance labels if they exist
-      this.clearDistanceLabels();
-      this.map.removeLayer(this.routeLine);
-      this.routeLine = null;
-    }
-
-    // Add new markers
-    this.waypoints.forEach((waypoint, index) => {
-      this.addMarkerToMap(waypoint, index);
-    });
-
-    console.log(`🗺️ Map updated with ${this.waypoints.length} waypoints and route visualization`);
-  }
-
-  hasWaypoints(): boolean {
-    return this.waypoints.length > 0;
-  }
 
   hasValidWaypoints(): boolean {
     return this.waypoints.some(wp => wp.name.trim() !== '');
-  }
-
-  canLoadRoute(): boolean {
-    return this.gpsEnabled && this.hasWaypoints() && this.hasValidWaypoints();
   }
 
   private showUserLocationOnMap(position: any): void {
@@ -817,54 +444,10 @@ export class HomeComponent {
   }
 
 
-
-
-
-
   //--=====================================================================================================================================--//
   //--=====================================================================================================================================--//
   //--=====================================================================================================================================--//
 
-
-
-
-  private startGPSTracking(): void {
-    let lastPosition: { latitude: number; longitude: number; timestamp: number } | null = null;
-
-    this.gpsSubscription = this.gpsService.getCurrentPosition().subscribe(position => {
-      if (position) {
-        const now = Date.now();
-
-        // Calculate aircraft speed if we have a previous position
-        if (lastPosition && this.currentPosition) {
-          const timeDelta = (now - lastPosition.timestamp) / 1000; // seconds
-          const distance = this.calculateDistance(
-            lastPosition.latitude,
-            lastPosition.longitude,
-            position.latitude,
-            position.longitude
-          );
-
-          // Speed in knots (nautical miles per hour)
-          this.aircraftSpeed = timeDelta > 0 ? (distance / timeDelta) * 3600 : 0;
-        }
-
-        this.currentPosition = {
-          latitude: position.latitude,
-          longitude: position.longitude
-        };
-
-        // Store for next speed calculation
-        lastPosition = {
-          latitude: position.latitude,
-          longitude: position.longitude,
-          timestamp: now
-        };
-
-
-      }
-    });
-  }
 
 
   getStatusMessage(): string {

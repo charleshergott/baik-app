@@ -1,35 +1,83 @@
 <div class="time-instruments-container">
 
-    <div class="displays-wrapper">
-        <div class="chronometer">
-            <div class="chrono-header">
-            </div>
-            <div class="time-display">
-                <div class="main-time">{{formatTime(elapsedTime)}}</div>
-                <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
-            </div>
-            <div class="chrono-controls">
-                <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning" class="control-btn">
-                    {{isRunning ? 'STOP' : 'START'}}
-                </button>
-                <button (click)="reset()" [disabled]="isRunning" class="control-btn reset">
-                    RESET
-                </button>
-            </div>
-        </div>
+    <!-- Speedometer -->
+    <div class="speedometer-container">
+        <div class="speedometer">
+            <div class="speed-header">
+                <div class="current-speed">
+                    <span class="speed-value">{{formatSpeed(speedData.currentSpeed)}}</span>
+                    <span class="speed-unit">{{getSpeedUnit()}}</span>
+                </div>
+                <!-- <button class="unit-toggle" (click)="toggleUnits()">
+                    {{getSpeedUnit()}}
+                </button> -->
 
-        <div class="watch-container">
-            <!-- Main Watch Display -->
+                <div class="speed-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">MAX</span>
+                        <span class="stat-value">{{formatSpeed(speedData.maxSpeed)}}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">AVG</span>
+                        <span class="stat-value">{{formatSpeed(speedData.avgSpeed)}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- <div class="speed-stats">
+                <div class="stat-item">
+                    <span class="stat-label">MAX</span>
+                    <span class="stat-value">{{formatSpeed(speedData.maxSpeed)}}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">AVG</span>
+                    <span class="stat-value">{{formatSpeed(speedData.avgSpeed)}}</span>
+                </div>
+            </div> -->
+            <div class="distance-display">
+                <span class="distance-label">DISTANCE</span>
+                <span class="distance-value">{{formatDistance(speedData.distance)}}</span>
+            </div>
+
+            <div class="chronometer">
+                <div class="chrono-header">
+                </div>
+                <div class="time-display">
+                    <div class="main-time">{{formatTime(elapsedTime)}}</div>
+                    <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
+                </div>
+                <div class="chrono-controls">
+                    <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning"
+                        class="control-btn">
+                        {{isRunning ? 'STOP' : 'START'}}
+                    </button>
+                    <button (click)="reset()" [disabled]="isRunning" class="control-btn reset">
+                        RESET
+                    </button>
+                    <button class="{{getFreezeButtonClass()}}" (click)="onFreezeTime()">
+                        {{getFreezeButtonText()}}
+                    </button>
+                    <button *ngIf="state.frozenStopTime" class="reset-btn" (click)="onResetFrozenTimes()"
+                        [disabled]="state.freezeStep === 0">
+                        RESET TIMES
+                    </button>
+                </div>
+
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="displays-wrapper">
+
+        <!-- <div class="watch-container">
             <div class="watch">
                 <div class="watch-display">
-                    <!-- <div class="current-time">{{getCurrentTime()}}</div> -->
-                    <!-- <div class="current-date">{{state.currentDate}}</div> -->
-
                     <div class="freeze-controls">
                         <button class="{{getFreezeButtonClass()}}" (click)="onFreezeTime()">
                             {{getFreezeButtonText()}}
                         </button>
-
                         <button *ngIf="state.frozenStopTime" class="reset-btn" (click)="onResetFrozenTimes()"
                             [disabled]="state.freezeStep === 0">
                             RESET TIMES
@@ -37,25 +85,19 @@
                     </div>
                 </div>
             </div>
-
-        </div>
+        </div> -->
     </div>
+
     <div class="frozen-times" *ngIf="state.frozenStartTime || state.frozenStopTime">
         <div class="frozen-time-section">
-
-            <!-- Start Time -->
             <div class="time-entry" *ngIf="state.frozenStartTime">
                 <div class="time-label">Start Time:</div>
                 <div class="frozen-time start-time">{{state.frozenStartTime}}</div>
             </div>
-
-            <!-- Stop Time -->
             <div class="time-entry" *ngIf="state.frozenStopTime">
                 <div class="time-label">Stop Time:</div>
                 <div class="frozen-time stop-time">{{state.frozenStopTime}}</div>
             </div>
-
-            <!-- Duration -->
             <div class="time-entry duration-entry" *ngIf="getTimeDifference()">
                 <div class="time-label">Duration:</div>
                 <div class="duration-time">{{getTimeDifference()}}</div>

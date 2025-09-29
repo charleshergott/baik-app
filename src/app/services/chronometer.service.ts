@@ -19,7 +19,7 @@ export class ChronometerService {
 
   // Speed monitoring properties
   private currentSpeed = 0;
-  private speedThreshold = 30; // knots
+  private speedThreshold = 1; // knots
   private autoStartEnabled = true;
 
   // Time freezing properties
@@ -112,7 +112,6 @@ export class ChronometerService {
       this._gpsService.enableGPSSpeedMonitoring();
     } else {
       console.warn('Geolocation not supported, using manual speed input');
-      //this._gpsService.startSpeedSimulation();
     }
   }
 

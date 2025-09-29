@@ -130,3 +130,11 @@ export interface ChronometerState {
     frozenStopTime: string | null;
     freezeStep: number;
 }
+
+export interface SpeedData {
+    currentSpeed: number;
+    maxSpeed: number;
+    avgSpeed: number;
+    distance: number; // in meters
+    lastPosition: GeolocationPosition | null;
+}
