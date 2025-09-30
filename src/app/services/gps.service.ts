@@ -34,6 +34,7 @@ export class GpsService {
 
   // IndexedDB
   private db: IDBDatabase | null = null;
+  private dbInitialized: Promise<void>;
   private readonly DB_NAME = 'BikeRoutesDB';
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'routes';
@@ -45,7 +46,7 @@ export class GpsService {
 
   constructor() {
     console.log(`🔧 GPS Service: ${this.isDevelopmentMode ? 'MOCK MODE' : 'REAL MODE'}`);
-    this.initIndexedDB();
+    this.dbInitialized = this.initIndexedDB();
   }
 
   private async initIndexedDB(): Promise<void> {
@@ -75,6 +76,11 @@ export class GpsService {
         }
       };
     });
+  }
+
+  // Public method to ensure DB is ready
+  async ensureDbReady(): Promise<void> {
+    await this.dbInitialized;
   }
 
   getCurrentPosition(): Observable<Position | null> {
@@ -176,6 +182,8 @@ export class GpsService {
   }
 
   private async saveRoute(route: SavedRoute): Promise<void> {
+    await this.dbInitialized; // Wait for DB to be ready
+
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'));
@@ -199,6 +207,8 @@ export class GpsService {
   }
 
   async getAllRoutes(): Promise<SavedRoute[]> {
+    await this.dbInitialized; // Wait for DB to be ready
+
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'));
@@ -223,6 +233,8 @@ export class GpsService {
   }
 
   async getRoute(id: string): Promise<SavedRoute | null> {
+    await this.dbInitialized; // Wait for DB to be ready
+
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'));
@@ -244,6 +256,8 @@ export class GpsService {
   }
 
   async updateRouteLastUsed(id: string): Promise<void> {
+    await this.dbInitialized; // Wait for DB to be ready
+
     const route = await this.getRoute(id);
     if (route) {
       route.lastUsed = new Date().toISOString();
@@ -252,6 +266,8 @@ export class GpsService {
   }
 
   async deleteRoute(id: string): Promise<void> {
+    await this.dbInitialized; // Wait for DB to be ready
+
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'));
