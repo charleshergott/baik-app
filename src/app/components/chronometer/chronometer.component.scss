@@ -19,16 +19,13 @@ $muted-text: #bdc3c7;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding-left: 5px;
-    padding-right: 5px
 }
 
 .speedometer {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea 0% 0%, #764ba2 100%);
     border-radius: 20px;
-    padding: 1.5rem;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-    min-width: 280px;
+    width: 100%;
     color: white;
 }
 
@@ -112,7 +109,7 @@ $muted-text: #bdc3c7;
     justify-content: space-between;
     align-items: center;
     background: rgba(0, 0, 0, 0.2);
-    padding: 0.8rem 1rem;
+    padding: 5px;
     border-radius: 10px;
     margin-top: 1rem;
 }
@@ -128,15 +125,10 @@ $muted-text: #bdc3c7;
     font-weight: 700;
 }
 
-/* Responsive adjustments */
+
 @media (max-width: 768px) {
     .displays-wrapper {
         flex-direction: column;
-    }
-
-    .speedometer {
-        min-width: 100%;
-        max-width: 100%;
     }
 
     .speed-value {

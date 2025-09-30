@@ -11,30 +11,21 @@
 
         </div>
 
-        <!-- Mobile-friendly waypoint summary -->
-        <div class="waypoints-summary" *ngIf="waypoints.length > 0">
-            <!-- <div class="summary-header">
-                <h3>Route: {{waypoints.length}} waypoints</h3>
-                <button (click)="clearAllWaypoints()" class="clear-btn">Clear All</button>
-            </div> -->
-
-        </div>
     </div>
 
-    <!-- <div class="flight-controls"> -->
-    <!-- <div class="flight-controls"> -->
+
     <div class="load-route-btn">
         <!-- <button *ngIf="!isRecordingRoute" (click)="startRecording()" [disabled]="!hasGpsSignal" class="btn-start">
             🎬 Start Recording
         </button> -->
 
         <button *ngIf="isRecordingRoute" (click)="stopRecording()" class="btn-stop">
-            ⏹️ Stop Recording
+            ⏹️
         </button>
 
         <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="saveRoute()"
             class="btn-save">
-            💾 Save Route
+            💾
         </button>
 
         <button (click)="toggleSavedRoutes()" class="btn-saved-routes">
@@ -43,18 +34,13 @@
 
         <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="clearCurrentRoute()"
             class="btn-clear">
-            🗑️ Clear
+            🗑️
         </button>
-        <small>v.24.300925</small>
+        <small>v.26.300925</small>
     </div>
-    <!-- </div> -->
 
-
-    <!-- </div> -->
 </div>
 
-
-<!-- Saved Routes Panel -->
 <div *ngIf="showSavedRoutes" class="saved-routes-panel">
     <div class="panel-header">
         <h3>Saved Routes</h3>

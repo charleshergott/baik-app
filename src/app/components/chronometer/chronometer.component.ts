@@ -118,7 +118,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
       case 1:
         return 'CLOCK STOP';
       case 2:
-        return 'CLOCK NEW START';
+        return 'REBOOT';
       default:
         return 'FREEZE TIME';
     }
