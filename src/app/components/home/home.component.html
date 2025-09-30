@@ -21,12 +21,64 @@
         </div>
     </div>
 
-    <div class="flight-controls">
-        <div class="flight-controls">
-            <div class="load-route-btn">
-                <small>v.24.300925</small>
+    <!-- <div class="flight-controls"> -->
+    <!-- <div class="flight-controls"> -->
+    <div class="load-route-btn">
+        <!-- <button *ngIf="!isRecordingRoute" (click)="startRecording()" [disabled]="!hasGpsSignal" class="btn-start">
+            🎬 Start Recording
+        </button> -->
+
+        <button *ngIf="isRecordingRoute" (click)="stopRecording()" class="btn-stop">
+            ⏹️ Stop Recording
+        </button>
+
+        <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="saveRoute()"
+            class="btn-save">
+            💾 Save Route
+        </button>
+
+        <button (click)="toggleSavedRoutes()" class="btn-saved-routes">
+            📂 ({{ savedRoutes.length }})
+        </button>
+
+        <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="clearCurrentRoute()"
+            class="btn-clear">
+            🗑️ Clear
+        </button>
+        <small>v.24.300925</small>
+    </div>
+    <!-- </div> -->
+
+
+    <!-- </div> -->
+</div>
+
+
+<!-- Saved Routes Panel -->
+<div *ngIf="showSavedRoutes" class="saved-routes-panel">
+    <div class="panel-header">
+        <h3>Saved Routes</h3>
+        <button (click)="toggleSavedRoutes()" class="btn-close">✕</button>
+    </div>
+
+    <div class="routes-list">
+        <div *ngFor="let route of savedRoutes" class="route-item" (click)="viewSavedRoute(route)">
+            <div class="route-info">
+                <h4>{{ route.name }}</h4>
+                <div class="route-stats">
+                    <span>📏 {{ formatDistance(route.distance) }}</span>
+                    <span>⏱️ {{ formatDuration(route.duration) }}</span>
+                    <span>⚡ {{ formatSpeed(route.maxSpeed) }}</span>
+                </div>
+                <div class="route-date">{{ formatDate(route.startTime) }}</div>
             </div>
+            <button (click)="deleteSavedRoute(route, $event)" class="btn-delete">
+                🗑️
+            </button>
         </div>
 
+        <div *ngIf="savedRoutes.length === 0" class="no-routes">
+            No saved routes yet. Start recording to create one!
+        </div>
     </div>
 </div>

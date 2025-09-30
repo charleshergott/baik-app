@@ -114,7 +114,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   getFreezeButtonText(): string {
     switch (this.currentState.freezeStep) {
       case 0:
-        return 'CLOCK START';
+        return 'CLOCK';
       case 1:
         return 'CLOCK STOP';
       case 2:

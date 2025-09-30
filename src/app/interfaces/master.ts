@@ -23,11 +23,17 @@ export interface SavedRoute {
     id: string;
     name: string;
     waypoints: Waypoint[];
-    createdAt: string;
-    lastUsed?: string;
+    coordinates: [number, number][]; // Array of [lat, lng] for quick map rendering
+    distance: number; // in meters
+    duration: number; // in seconds
+    maxSpeed: number; // in knots
+    averageSpeed: number; // in knots
+    startTime: number; // timestamp
+    endTime: number; // timestamp
+    createdAt: string; // ISO string
+    lastUsed?: string; // ISO string
     description?: string;
 }
-
 
 export interface Waypoint {
     id: string;

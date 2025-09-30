@@ -121,12 +121,15 @@ export class ChronometerService {
     this.gpsSubscription = this._gpsService.getSpeedUpdates().subscribe(
       speed => {
         this.currentSpeed = speed;
-
         if (this.autoStartEnabled) {
           if (speed >= this.speedThreshold && !this.isRunning) {
             this.autoStartChronometer();
+            // 🚴 Start route recording when chronometer starts
+            this._gpsService.startRouteRecording();
           } else if (speed < this.speedThreshold && this.isRunning) {
             this.autoStopChronometer();
+            // 🛑 Stop route recording when chronometer stops
+            this._gpsService.stopRouteRecording();
           }
         }
         this.updateState();
@@ -275,6 +278,10 @@ export class ChronometerService {
     if (!this.isRunning) {
       this.startTime = Date.now() - this.elapsedTime;
       this.isRunning = true;
+
+      // 🚴 Start route recording when chronometer auto-starts
+      this._gpsService.startRouteRecording();
+      console.log('📍 Route recording started automatically');
     }
   }
 
@@ -282,6 +289,10 @@ export class ChronometerService {
     console.log(`Auto-stopping chronometer: Speed ${this.currentSpeed.toFixed(1)} kn < ${this.speedThreshold} kn`);
     if (this.isRunning) {
       this.isRunning = false;
+
+      // 🛑 Stop route recording when chronometer auto-stops
+      this._gpsService.stopRouteRecording();
+      console.log('📍 Route recording stopped automatically');
     }
   }
 
@@ -302,7 +313,6 @@ export class ChronometerService {
     this.updateState();
   }
 
-  // Formatting methods
   private formatTime(milliseconds: number): string {
     const totalSeconds = Math.floor(milliseconds / 1000);
     const minutes = Math.floor(totalSeconds / 60);

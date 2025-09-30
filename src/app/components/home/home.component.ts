@@ -1,15 +1,13 @@
 import { ChangeDetectorRef, Component, HostListener, NgZone } from '@angular/core';
 import { SavedRoute, Waypoint } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
-import { NavigationService } from '../../services/navigation.service';
 import { AlertService } from '../../services/alert.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { filter, Subscription, take } from 'rxjs';
-
+import { ChronometerComponent } from '../chronometer/chronometer.component';
 
 import * as L from 'leaflet';
-import { ChronometerComponent } from '../chronometer/chronometer.component';
 
 
 @Component({
@@ -32,6 +30,7 @@ export class HomeComponent {
 
   private map!: L.Map;
   private routeLine: L.Polyline | null = null;
+  private gpsRouteLine: L.Polyline | null = null; // For GPS-tracked route
   private distanceLabels: L.Marker[] = [];
   waypoints: Waypoint[] = [];
   gpsEnabled = true;
@@ -40,6 +39,7 @@ export class HomeComponent {
   private userLocationMarker: any;
   private markers: any[] = [];
   private userLocation?: { lat: number, lng: number };
+
   // New properties for info window approach
   activeWaypoint: Waypoint | null = null;
   activeWaypointIndex: number = -1;
@@ -47,14 +47,15 @@ export class HomeComponent {
   infoWindowPosition = { x: 0, y: 0 };
   isMobile = false;
 
-  // Saved routes for quick access
+  // Route tracking properties
+  isRecordingRoute = false;
+  currentRouteStats = { distance: 0, maxSpeed: 0, duration: 0 };
   savedRoutes: SavedRoute[] = [];
-
-
+  showSavedRoutes = false;
+  private routeSubscription?: Subscription;
 
   //--=====================================================================================
   //--=====================================================================================
-
 
   private waypointsSubscription?: Subscription;
   navigationActive = false;
@@ -78,123 +79,18 @@ export class HomeComponent {
   //--==========================================================================================
 
   constructor(
-    private gpsService: GpsService,
-    private alertService: AlertService,
+    public _gpsService: GpsService,
+    private _alertService: AlertService,
     private _cdr: ChangeDetectorRef,
     private _ngZone: NgZone
   ) {
     this.checkIfMobile();
 
     // Monitor GPS signal
-    this.gpsService.getCurrentPosition().subscribe(position => {
+    this._gpsService.getCurrentPosition().subscribe(position => {
       this.hasGpsSignal = position !== null;
     });
-
   }
-
-
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-
-
-
-  setSelectedTab(tab: string): void {
-    setTimeout(() => {
-      this.selectedTab = tab;
-      this._cdr.detectChanges(); // Use detectChanges instead of markForCheck
-
-      if (tab === 'map') {
-        setTimeout(async () => {
-          await this.recreateMap();
-        }, 200);
-      }
-    }, 0);
-  }
-
-
-  private async recreateMap(): Promise<void> {
-    try {
-      // Define default center and zoom
-      let currentCenter: L.LatLngExpression = this.getDefaultMapCenter();
-      let currentZoom = 8;
-
-      if (this.map) {
-        try {
-          // Try to preserve current view
-          const center = this.map.getCenter();
-          if (center && center.lat && center.lng) {
-            currentCenter = [center.lat, center.lng];
-            currentZoom = this.map.getZoom();
-          }
-        } catch (error) {
-          console.warn('Could not get current map center, using default');
-        }
-
-        this.map.remove(); // Remove old map
-      }
-
-      console.log('🗺️ Recreating map...');
-
-      // Wait for DOM cleanup
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Create new map
-      this.map = L.map('map').setView(currentCenter, currentZoom);
-
-      // Add tile layer
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(this.map);
-
-      console.log('🗺️ Map created, adding click event...');
-
-      // Add click event with proper typing
-      this.map.on('click', (e: L.LeafletMouseEvent) => {
-        console.log('🖱️ Map clicked:', e.latlng);
-        this.onMapClick(e.latlng.lat, e.latlng.lng, e.containerPoint);
-      });
-
-      // Wait for map to render
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      console.log('🗺️ Map recreation complete');
-
-      // Center on user if GPS is available
-      if (this.gpsEnabled && this.hasGpsSignal) {
-        this.centerMapOnUser();
-      }
-
-    } catch (error) {
-      console.error('❌ Error recreating map:', error);
-    }
-  }
-
-  // Helper method to get default center coordinates
-  private getDefaultMapCenter(): L.LatLngExpression {
-    // You can customize this based on your application's needs
-    // Examples:
-    // return [40.7128, -74.0060]; // New York
-    // return [51.5074, -0.1278];  // London
-    // return [37.7749, -122.4194]; // San Francisco
-
-    // Or use user's last known location if available
-    if (this.userLocation) {
-      return [this.userLocation.lat, this.userLocation.lng];
-    }
-
-    // Default fallback (London)
-    return [51.505, -0.09];
-  }
-
-
-
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-
-
-
 
   ngOnInit(): void {
     // Run animation outside Angular zone
@@ -205,20 +101,25 @@ export class HomeComponent {
         this._ngZone.run(() => {
           this._cdr.detectChanges();
         });
-      }, 50); // Update every 50ms instead of every change detection cycle
+      }, 50);
     });
+
+    // Load saved routes on init
+    this.loadSavedRoutes();
   }
 
   ngAfterViewInit(): void {
     this.initializeMap();
 
     // Start GPS tracking immediately
-    this.gpsService.startTracking();
-    this.alertService.requestNotificationPermission();
+    this._gpsService.startTracking();
+    this._alertService.requestNotificationPermission();
 
     // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
 
+    // Subscribe to route updates for live tracking
+    this.subscribeToRouteUpdates();
   }
 
   checkIfMobile() {
@@ -226,33 +127,201 @@ export class HomeComponent {
   }
 
   private initializeGPSWithMap(): void {
-    // Wait for GPS to get a signal, then center once
-    this.gpsService.getCurrentPosition().pipe(
-      filter(position => position !== null), // Wait for actual GPS signal
-      take(1) // Only take the first valid position
+    this._gpsService.getCurrentPosition().pipe(
+      filter(position => position !== null),
+      take(1)
     ).subscribe(position => {
       if (position && this.map) {
         console.log('📍 Initial GPS signal received, centering map once');
-
-        // Center map ONCE on first GPS signal
         this.map.setView([position.latitude, position.longitude], 12);
-
-        // Now start continuous tracking (marker updates only)
         this.startTrackingUserPosition();
       }
     });
   }
 
   private startTrackingUserPosition(): void {
-    // Continuously update user position marker WITHOUT moving the map
-    this.gpsService.getCurrentPosition().subscribe(position => {
+    this._gpsService.getCurrentPosition().subscribe(position => {
       if (position && this.map) {
-        // ONLY update the marker, never call setView()
         this.showUserLocationOnMap(position);
-
-        // Update GPS signal status
         this.hasGpsSignal = true;
       }
+    });
+  }
+
+  // Route tracking methods
+  private subscribeToRouteUpdates(): void {
+    this.routeSubscription = this._gpsService.getRouteCoordinates().subscribe(coordinates => {
+      if (coordinates.length > 0) {
+        this.updateGpsRouteOnMap(coordinates);
+      }
+    });
+  }
+
+  private updateGpsRouteOnMap(coordinates: [number, number][]): void {
+    if (!this.map) return;
+
+    if (this.gpsRouteLine) {
+      // Update existing route
+      this.gpsRouteLine.setLatLngs(coordinates);
+    } else {
+      // Create new route line
+      this.gpsRouteLine = L.polyline(coordinates, {
+        color: '#FF5722',
+        weight: 4,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(this.map);
+    }
+
+    // Update stats
+    if (this.isRecordingRoute) {
+      this.currentRouteStats = this._gpsService.getRouteStats();
+    }
+  }
+
+  startRecording(): void {
+    if (!this.hasGpsSignal) {
+      alert('GPS signal not available. Please wait for GPS to connect.');
+      return;
+    }
+
+    this._gpsService.clearRoute();
+    this._gpsService.startRouteRecording();
+    this.isRecordingRoute = true;
+
+    // Clear previous GPS route line
+    if (this.gpsRouteLine) {
+      this.map.removeLayer(this.gpsRouteLine);
+      this.gpsRouteLine = null;
+    }
+
+    console.log('🎬 Started recording route');
+  }
+
+  stopRecording(): void {
+    this._gpsService.stopRouteRecording();
+    this.isRecordingRoute = false;
+    console.log('⏹️ Stopped recording route');
+  }
+
+  async saveRoute(): Promise<void> {
+    if (!this.isRecordingRoute && this._gpsService.getCurrentRoute().length === 0) {
+      alert('No route to save');
+      return;
+    }
+
+    this.stopRecording();
+
+    const stats = this._gpsService.getRouteStats();
+    const distanceKm = (stats.distance / 1000).toFixed(1);
+    const durationMin = Math.floor(stats.duration / 60);
+
+    const name = prompt(
+      `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} knots\n\nEnter a name:`,
+      `Ride ${distanceKm}km`
+    );
+
+    if (name) {
+      try {
+        const id = await this._gpsService.saveCurrentRoute(name);
+        console.log('💾 Route saved with ID:', id);
+        alert(`Route "${name}" saved successfully!`);
+        await this.loadSavedRoutes();
+        this.clearCurrentRoute();
+      } catch (error) {
+        console.error('Failed to save route:', error);
+        alert('Failed to save route. Please try again.');
+      }
+    }
+  }
+
+  clearCurrentRoute(): void {
+    this._gpsService.clearRoute();
+    this.isRecordingRoute = false;
+    this.currentRouteStats = { distance: 0, maxSpeed: 0, duration: 0 };
+
+    if (this.gpsRouteLine) {
+      this.map.removeLayer(this.gpsRouteLine);
+      this.gpsRouteLine = null;
+    }
+  }
+
+  async loadSavedRoutes(): Promise<void> {
+    try {
+      this.savedRoutes = await this._gpsService.getAllRoutes();
+      console.log(`📂 Loaded ${this.savedRoutes.length} saved routes`);
+    } catch (error) {
+      console.error('Failed to load routes:', error);
+    }
+  }
+
+  toggleSavedRoutes(): void {
+    this.showSavedRoutes = !this.showSavedRoutes;
+  }
+
+  viewSavedRoute(route: SavedRoute): void {
+    // Clear current recording if any
+    if (this.isRecordingRoute) {
+      this.stopRecording();
+    }
+
+    // Load the route
+    this._gpsService.loadRouteToMap(route);
+
+    // Center map on route
+    if (route.coordinates.length > 0) {
+      const bounds = L.latLngBounds(route.coordinates);
+      this.map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    this.showSavedRoutes = false;
+  }
+
+  async deleteSavedRoute(route: SavedRoute, event: Event): Promise<void> {
+    event.stopPropagation(); // Prevent viewSavedRoute from firing
+
+    if (!route.id) return;
+
+    const confirmDelete = confirm(`Delete route "${route.name}"?`);
+    if (confirmDelete) {
+      try {
+        await this._gpsService.deleteRoute(route.id);
+        await this.loadSavedRoutes();
+        console.log('🗑️ Route deleted');
+      } catch (error) {
+        console.error('Failed to delete route:', error);
+        alert('Failed to delete route');
+      }
+    }
+  }
+
+  formatDistance(meters: number): string {
+    const km = meters / 1000;
+    return km < 1 ? `${meters.toFixed(0)}m` : `${km.toFixed(2)}km`;
+  }
+
+  formatDuration(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
+    }
+    return `${mins}m`;
+  }
+
+  formatSpeed(knots: number): string {
+    return `${knots.toFixed(1)} kn`;
+  }
+
+  formatDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   }
 
@@ -262,8 +331,8 @@ export class HomeComponent {
       return;
     }
 
-    this.gpsService.getCurrentPosition().pipe(
-      take(1) // Only center once when button is clicked
+    this._gpsService.getCurrentPosition().pipe(
+      take(1)
     ).subscribe(position => {
       if (position && this.map) {
         console.log('📍 Manual centering on current position');
@@ -273,28 +342,22 @@ export class HomeComponent {
   }
 
   private initializeMap(): void {
-    // Initialize map centered on a default location (you can change this)
-    this.map = L.map('map').setView([40.7128, -74.0060], 8); // New York area
+    this.map = L.map('map').setView([40.7128, -74.0060], 8);
 
-    // Add OpenStreetMap tiles (free)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
-    // Add click event to map - modified to open info window
     this.map.on('click', (e: any) => {
       this.onMapClick(e.latlng.lat, e.latlng.lng, e.containerPoint);
     });
 
-    // Try to center on user's location if GPS is available
     if (this.gpsEnabled && this.hasGpsSignal) {
       this.centerMapOnUser();
     }
   }
 
   onMapClick(lat: number, lng: number, screenPosition: any) {
-
-    // Create new waypoint
     const newWaypoint: Waypoint = {
       id: this.generateId(),
       name: '',
@@ -307,19 +370,15 @@ export class HomeComponent {
       frequency: ''
     };
 
-    // Set active waypoint for editing
     this.activeWaypoint = { ...newWaypoint };
-    this.activeWaypointIndex = this.waypoints.length; // Will be the index if saved
+    this.activeWaypointIndex = this.waypoints.length;
     this.isNewWaypoint = true;
 
-    // Position info window near click point
     this.infoWindowPosition = {
       x: Math.min(screenPosition.x - 150, window.innerWidth - 320),
       y: Math.max(screenPosition.y - 100, 10)
     };
   }
-
-
 
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 3440.065; // Nautical miles
@@ -333,50 +392,37 @@ export class HomeComponent {
     return R * c;
   }
 
-
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
   }
 
-
   getDistanceToPreviousWaypoint(index: number): number {
     if (index === 0) return 0;
-
     const wp1 = this.waypoints[index - 1];
     const wp2 = this.waypoints[index];
-
     return this.calculateDistance(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
   }
 
-
   getTotalRouteDistance(): number {
     if (this.waypoints.length < 2) return 0;
-
     let totalDistance = 0;
     for (let i = 1; i < this.waypoints.length; i++) {
       totalDistance += this.getDistanceToPreviousWaypoint(i);
     }
-
     return totalDistance;
   }
-
 
   getTotalRouteTime(): number {
     const totalDistance = this.getTotalRouteDistance();
     if (totalDistance === 0) return 0;
-
-    // Calculate average speed from all waypoints that have speed defined
     const waypointsWithSpeed = this.waypoints.filter(wp => wp.speedKnots && wp.speedKnots > 0);
     if (waypointsWithSpeed.length === 0) return 0;
-
     const averageSpeed = waypointsWithSpeed.reduce((sum, wp) => sum + (wp.speedKnots || 0), 0) / waypointsWithSpeed.length;
-
-    return totalDistance / averageSpeed; // Hours
+    return totalDistance / averageSpeed;
   }
 
-
   private centerMapOnUser(): void {
-    this.gpsService.getCurrentPosition().subscribe(position => {
+    this._gpsService.getCurrentPosition().subscribe(position => {
       if (position) {
         this.map.setView([position.latitude, position.longitude], 10);
       }
@@ -388,24 +434,16 @@ export class HomeComponent {
     return { x: point.x, y: point.y };
   }
 
-
-  hasValidWaypoints(): boolean {
-    return this.waypoints.some(wp => wp.name.trim() !== '');
-  }
-
   private showUserLocationOnMap(position: any): void {
-    // Check if map exists and is properly initialized
     if (!this.map || !this.map.getContainer()) {
       console.warn('Map not ready yet, skipping marker update');
       return;
     }
 
-    // Remove existing user marker if any
     if (this.userLocationMarker) {
       this.map.removeLayer(this.userLocationMarker);
     }
 
-    // Create a special icon for user location
     const userIcon = L.icon({
       iconUrl: 'data:image/svg+xml;base64,' + btoa(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#2196F3">
@@ -419,10 +457,9 @@ export class HomeComponent {
     });
 
     try {
-      // Add user location marker (this does NOT move the map view)
       this.userLocationMarker = L.marker([position.latitude, position.longitude], {
         icon: userIcon,
-        zIndexOffset: 1000 // Always on top
+        zIndexOffset: 1000
       }).addTo(this.map);
 
       this.userLocationMarker.bindPopup('📍 Your Current Location<br>Click "Center on My Location" to focus here');
@@ -431,63 +468,27 @@ export class HomeComponent {
     }
   }
 
-
   private generateId(): string {
     return Math.random().toString(36).substr(2, 9);
   }
 
-
-  // Handle window resize for mobile detection
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
     this.checkIfMobile();
   }
 
-
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-  //--=====================================================================================================================================--//
-
-
-
   getStatusMessage(): string {
     if (!this.navigationActive) return 'No active route';
     if (this.currentWaypointIndex >= this.waypoints.length) return 'Route completed';
-
     const remaining = this.waypoints.length - this.currentWaypointIndex;
     return `${remaining} waypoint${remaining !== 1 ? 's' : ''} remaining`;
   }
-
-  getProgressPercentage(): number {
-    if (this.waypoints.length === 0) return 0;
-    return (this.currentWaypointIndex / this.waypoints.length) * 100;
-  }
-
-  getAircraftSpeed(): number {
-    return Math.round(this.aircraftSpeed);
-  }
-
-  getTimeToNextWaypoint(): number {
-    if (this.aircraftSpeed <= 0 || this.distanceToNextWaypoint <= 0) return 0;
-    return (this.distanceToNextWaypoint / this.aircraftSpeed) * 60; // minutes
-  }
-
 
   toggleDistances(): void {
     this.showDistances = !this.showDistances;
   }
 
-  toggleBearings(): void {
-    this.showBearings = !this.showBearings;
-  }
-
-  toggleETAs(): void {
-    this.showETAs = !this.showETAs;
-  }
-
   getProgressiveRollOffset(): number {
-    // Convert percentage to pixels offset
-    // Each waypoint item is approximately 100px high
     const waypointHeight = 100;
     return (this.rollProgressPercentage / 100) * waypointHeight;
   }
@@ -502,6 +503,9 @@ export class HomeComponent {
     }
     if (this.animationInterval) {
       clearInterval(this.animationInterval);
+    }
+    if (this.routeSubscription) {
+      this.routeSubscription.unsubscribe();
     }
   }
 }
