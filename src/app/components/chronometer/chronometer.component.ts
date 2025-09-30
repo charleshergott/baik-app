@@ -97,9 +97,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     this.resetSpeedData();
   }
 
-  lap(): void {
-    this._chronometerService.lap();
-  }
+
 
   onFreezeTime(): void {
     this._chronometerService.freezeTime();
@@ -148,9 +146,9 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     return this.currentState.isRunning;
   }
 
-  get lapTimes(): number[] {
-    return this.currentState.lapTimes;
-  }
+  // get lapTimes(): number[] {
+  //   return this.currentState.lapTimes;
+  // }
 
   get currentSpeed(): number {
     return this.currentState.currentSpeed;
@@ -354,6 +352,40 @@ export class ChronometerComponent implements OnInit, OnDestroy {
       lastPosition: null
     };
     this.speedReadings = [];
+  }
+
+  lap(): void {
+    console.log('Lap button clicked!');
+    console.log('Is running?', this.isRunning);
+    console.log('Current lap times:', this.lapTimes);
+
+    if (this.isRunning) {
+      this._chronometerService.lap();
+      console.log('After lap, lap times:', this.lapTimes);
+      this._cdr.detectChanges();
+    }
+  }
+
+  formatLapTime(lapTime: number): string {
+    const totalSeconds = Math.floor(lapTime / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const milliseconds = Math.floor((lapTime % 1000) / 10); // Get centiseconds (00-99)
+
+    if (minutes > 0) {
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+    }
+  }
+
+  getLapNumber(index: number): number {
+    // Assuming your service exposes totalLapCount
+    return this._chronometerService.totalLapCount - index;
+  }
+
+  get lapTimes(): number[] {
+    return this.currentState.lapTimes;
   }
 
   // Formatting methods for speed display

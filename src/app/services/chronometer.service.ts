@@ -16,6 +16,7 @@ export class ChronometerService {
   private lapTimes: number[] = [];
   private timerSubscription: Subscription | null = null;
   private clockSubscription: Subscription | null = null;
+  public totalLapCount: number = 0;
 
   // Speed monitoring properties
   private currentSpeed = 0;
@@ -53,7 +54,7 @@ export class ChronometerService {
       formattedMilliseconds: this.formatMilliseconds(0),
       lapTimes: [],
       currentSpeed: 0,
-      speedThreshold: 30,
+      speedThreshold: 3,
       autoStartEnabled: true,
       speedStatus: 'BELOW THRESHOLD',
       currentTime: this.getCurrentTime(),
@@ -176,11 +177,13 @@ export class ChronometerService {
       this.startTime = 0;
       this.lapTimes = [];
       this.updateState();
+      this.totalLapCount = 0;
     }
   }
 
   public lap(): void {
     if (this.isRunning) {
+      this.totalLapCount++; // Increment total count
       this.lapTimes.unshift(this.elapsedTime);
       if (this.lapTimes.length > 5) {
         this.lapTimes = this.lapTimes.slice(0, 5);
@@ -189,7 +192,7 @@ export class ChronometerService {
     }
   }
 
-  // Time freezing methods
+
   public freezeTime(): void {
     const currentTime = this.getCurrentTime();
 

@@ -4,17 +4,6 @@ import { Position } from '../interfaces/master';
 import { environment } from '../environments/environment.prod';
 import { HttpClient } from '@angular/common/http';
 
-// NEW: Interface for nearby aircraft data
-export interface NearbyAircraft {
-  userId: string;
-  position: Position;
-  distance: number; // in kilometers
-  bearing: number; // bearing from current position to other aircraft
-  isConverging: boolean; // true if aircraft are heading towards each other
-  relativeHeading: number; // difference in headings
-  timeSinceUpdate: number; // milliseconds since last update
-  riskLevel: 'low' | 'medium' | 'high'; // collision risk assessment
-}
 
 @Injectable({
   providedIn: 'root'
@@ -24,7 +13,6 @@ export class GpsService {
 
   private currentPosition$ = new BehaviorSubject<Position | null>(null);
   private currentSpeed$ = new BehaviorSubject<number>(0);
-  private nearbyAircraft$ = new BehaviorSubject<NearbyAircraft[]>([]);
   private isTracking = false;
   private watchId: number | null = null;
   private speedHistory: number[] = [];
@@ -35,36 +23,13 @@ export class GpsService {
   currentSpeed = 0; // in knots
   private readonly SPEED_HISTORY_LENGTH = 5;
 
-  // NEW: Database sync properties
-  private databaseSyncSubscription: Subscription | null = null;
-  private isDatabaseSyncEnabled = false;
-  private readonly DATABASE_SYNC_INTERVAL = 70000; // 70 seconds in milliseconds
-  private readonly MAX_POSITIONS_PER_USER = 5; // Maximum stored positions per user
-  private readonly MIN_SPEED_THRESHOLD = 30; // Minimum speed in knots to send position
 
-  // NEW: Traffic monitoring properties
-  private trafficMonitoringSubscription: Subscription | null = null;
-  private isTrafficMonitoringEnabled = false;
-  private readonly TRAFFIC_CHECK_INTERVAL = 10000; // Check every 10 seconds
-  private readonly PROXIMITY_RADIUS_KM = 30; // 30 km radius
-  private readonly COLLISION_ANGLE_THRESHOLD = 45; // degrees
-  private currentUserId: string | null = null;
-  private hasShownAlert = false; // Prevent repeated alerts
-  private alertedAircraft = new Set<string>(); // Track which aircraft we've alerted about
+  private readonly MIN_SPEED_THRESHOLD = 3; // Minimum speed in knots to send position
 
-  // Mock data properties
   private isDevelopmentMode = environment.enableMockGPS;
-  private mockPosition: Position = {
-    latitude: 40.7128,
-    longitude: -74.0060,
-    heading: 45,
-    speed: 60,
-    timestamp: Date.now()
-  };
-  private mockInterval: any;
-  private mockSpeedInterval: any;
 
-  constructor(private http: HttpClient) {
+
+  constructor() {
     console.log(`🔧 GPS Service: ${this.isDevelopmentMode ? 'MOCK MODE' : 'REAL MODE'}`);
   }
 
@@ -89,14 +54,7 @@ export class GpsService {
 
   stopTracking(): void {
     if (this.isDevelopmentMode) {
-      if (this.mockInterval) {
-        clearInterval(this.mockInterval);
-        this.mockInterval = null;
-      }
-      if (this.mockSpeedInterval) {
-        clearInterval(this.mockSpeedInterval);
-        this.mockSpeedInterval = null;
-      }
+
     } else {
       if (this.watchId !== null) {
         navigator.geolocation.clearWatch(this.watchId);

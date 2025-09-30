@@ -1,7 +1,8 @@
 <div class="time-instruments-container">
-    <!-- Speedometer -->
     <div class="speedometer-container">
         <div class="speedometer">
+
+            <!-- Speed Display Section -->
             <div class="speed-header">
                 <div class="current-speed">
                     <span class="speed-value">{{formatSpeed(speedData.currentSpeed)}}</span>
@@ -18,17 +19,22 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Distance Display -->
             <div class="distance-display">
                 <span class="distance-label">DISTANCE</span>
                 <span class="distance-value">{{formatDistance(speedData.distance)}}</span>
             </div>
+
+            <!-- Chronometer Section -->
             <div class="chronometer">
-                <div class="chrono-header">
-                </div>
+                <!-- Time Display -->
                 <div class="time-display">
                     <div class="main-time">{{formatTime(elapsedTime)}}</div>
                     <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
                 </div>
+
+                <!-- Main Controls -->
                 <div class="chrono-controls">
                     <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning"
                         class="control-btn">
@@ -50,18 +56,30 @@
                 </div>
 
                 <!-- Lap Times Display -->
-                <!-- <div class="lap-times" *ngIf="lapTimes.length > 0">
-                    <div class="lap-header">LAP TIMES</div>
+                <div class="lap-times" *ngIf="lapTimes.length > 0">
                     <div class="lap-list">
                         <div class="lap-item" *ngFor="let lapTime of lapTimes; let i = index">
                             <span class="lap-number">Lap {{getLapNumber(i)}}</span>
                             <span class="lap-time">{{formatLapTime(lapTime)}}</span>
                         </div>
                     </div>
+                </div>
+
+                <!-- Freeze Time Controls -->
+                <!-- <div class="freeze-controls">
+                    <button class="{{getFreezeButtonClass()}}" (click)="onFreezeTime()">
+                        {{getFreezeButtonText()}}
+                    </button>
+                    <button *ngIf="state.frozenStopTime" class="reset-btn" (click)="onResetFrozenTimes()"
+                        [disabled]="state.freezeStep === 0">
+                        RESET TIMES
+                    </button>
                 </div> -->
             </div>
         </div>
     </div>
+
+    <!-- Frozen Times Display -->
     <div class="frozen-times" *ngIf="state.frozenStartTime || state.frozenStopTime">
         <div class="frozen-time-section">
             <div class="time-entry" *ngIf="state.frozenStartTime">

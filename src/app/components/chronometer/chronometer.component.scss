@@ -163,6 +163,8 @@ $muted-text: #bdc3c7;
     }
 }
 
+
+
 .chronometer {
     flex: 1;
     background: black;
@@ -172,6 +174,74 @@ $muted-text: #bdc3c7;
     font-family: 'Courier New', monospace;
     margin-top: 15px;
     max-height: 100px;
+
+
+}
+
+.lap-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    margin-bottom: 0.8rem;
+    opacity: 0.9;
+    text-align: center;
+    color: white;
+}
+
+.lap-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+    z-index: 2;
+    position: absolute;
+    right: 0;
+    margin-top: 15px;
+
+    &::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    }
+}
+
+.lap-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.5rem;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    color: white;
+    gap: 10px;
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.lap-number {
+    font-size: 0.85rem;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.lap-time {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: monospace;
 }
 
 
@@ -207,6 +277,8 @@ $muted-text: #bdc3c7;
     display: flex;
     align-items: baseline;
     justify-content: center;
+
+
 }
 
 .main-time {
@@ -234,7 +306,10 @@ $muted-text: #bdc3c7;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s;
-    min-width: 80px;
+    padding: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .control-btn.start {
@@ -263,38 +338,6 @@ $muted-text: #bdc3c7;
     cursor: not-allowed;
 }
 
-.lap-times {
-    margin-top: 2rem;
-    border-top: 1px solid #333;
-    padding-top: 1rem;
-}
-
-.lap-header {
-    color: #00ff88;
-    font-weight: bold;
-    margin-bottom: 1rem;
-    text-align: center;
-}
-
-.lap-list {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.lap-time {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem;
-    border-bottom: 1px solid #222;
-}
-
-.lap-number {
-    color: #888;
-}
-
-.lap-value {
-    color: #00ff88;
-}
 
 /* Watch Styles */
 .watch-container {
