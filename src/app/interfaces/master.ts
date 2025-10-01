@@ -126,12 +126,6 @@ export interface ChronometerState {
     speedStatus: string;
     currentTime: string;
     currentDate: string;
-    currentTimezone: string;
-    utcTime: string;
-    worldTimes: Array<{ city: string, time: string }>;
-    hourAngle: number;
-    minuteAngle: number;
-    secondAngle: number;
     frozenStartTime: string | null;
     frozenStopTime: string | null;
     freezeStep: number;
@@ -143,4 +137,20 @@ export interface SpeedData {
     avgSpeed: number;
     distance: number; // in meters
     lastPosition: GeolocationPosition | null;
+}
+
+export interface SpeedStats {
+    current: number;
+    max: number;
+    average: number;
+}
+
+export interface OdometerStats {
+    totalDistance: number;
+    tripDistance: number;
+    currentSpeed: number;
+    maxSpeed: number;
+    averageSpeed: number;
+    movingTime: number; // time spent moving (above threshold)
+    totalTime: number; // total elapsed time
 }

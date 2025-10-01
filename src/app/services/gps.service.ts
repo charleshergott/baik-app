@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { Position, SavedRoute, Waypoint } from '../interfaces/master';
 import { environment } from '../environments/environment.prod';
-import { HttpClient } from '@angular/common/http';
+
 
 
 @Injectable({
@@ -12,16 +12,18 @@ import { HttpClient } from '@angular/common/http';
 export class GpsService {
 
   private currentPosition$ = new BehaviorSubject<Position | null>(null);
-  private currentSpeed$ = new BehaviorSubject<number>(0);
+
   private isTracking = false;
   private watchId: number | null = null;
-  private speedHistory: number[] = [];
+
   isGPSEnabled = false;
   private lastPosition: GeolocationPosition | null = null;
   private lastPositionTime = 0;
   private speedMonitoringInterval: any;
   currentSpeed = 0; // in knots
   private readonly SPEED_HISTORY_LENGTH = 5;
+  // Update MIN_SPEED_THRESHOLD to km/h
+  MIN_SPEED_THRESHOLD = 5; // Minimum speed in km/h 
 
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
@@ -38,9 +40,6 @@ export class GpsService {
   private readonly DB_NAME = 'BikeRoutesDB';
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'routes';
-
-  private readonly MIN_SPEED_THRESHOLD = 3; // Minimum speed in knots to send position
-
   private isDevelopmentMode = environment.enableMockGPS;
 
 
@@ -87,15 +86,6 @@ export class GpsService {
     return this.currentPosition$.asObservable();
   }
 
-  getSpeedUpdates(): Observable<number> {
-    return this.currentSpeed$.asObservable();
-  }
-
-  getCurrentSpeed(): number {
-    return this.currentSpeed;
-  }
-
-  // Route tracking methods
   getRouteCoordinates(): Observable<[number, number][]> {
     return this.routeCoordinates$.asObservable();
   }
@@ -396,120 +386,15 @@ export class GpsService {
     }
   }
 
-  enableGPSSpeedMonitoring(userId?: string): void {
-    // If already enabled, don't start again
-    if (this.isGPSEnabled) {
-      console.log('⚠️ GPS speed monitoring already enabled');
-      return;
-    }
-
-    const options = {
-      enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 1000
-    };
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        this.isGPSEnabled = true;
-        this.lastPosition = position;
-        this.lastPositionTime = Date.now();
-
-        // IMPORTANT: Set initial position for database sync
-        const initialPos: Position = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          heading: position.coords.heading || undefined,
-          speed: position.coords.speed || undefined,
-          timestamp: Date.now()
-        };
-        this.currentPosition$.next(initialPos);
-
-        // Add initial point to route if recording
-        this.addPointToRoute(initialPos.latitude, initialPos.longitude);
-
-        console.log('GPS enabled for speed monitoring', initialPos);
-
-        // Start watching position changes
-        navigator.geolocation.watchPosition(
-          (newPosition) => this.calculateSpeedFromGPS(newPosition),
-          (error) => {
-            console.error('GPS error:', error);
-            this.isGPSEnabled = false;
-          },
-          options
-        );
-
-      },
-      (error) => {
-        console.error('GPS initialization failed:', error);
-        this.isGPSEnabled = false;
-      },
-      options
-    );
-  }
-
   disableGPSSpeedMonitoring(): void {
     this.isGPSEnabled = false;
     this.lastPosition = null;
     this.lastPositionTime = 0;
-    this.speedHistory = [];
     this.currentSpeed = 0;
 
     console.log('GPS speed monitoring disabled');
   }
 
-  calculateSpeedFromGPS(position: GeolocationPosition): void {
-    // IMPORTANT: Always update the current position observable
-    const pos: Position = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      heading: position.coords.heading || undefined,
-      speed: position.coords.speed || undefined,
-      timestamp: Date.now()
-    };
-    this.currentPosition$.next(pos);
-
-    // Add to route if recording
-    this.addPointToRoute(pos.latitude, pos.longitude);
-
-    if (!this.lastPosition) {
-      this.lastPosition = position;
-      this.lastPositionTime = Date.now();
-      return;
-    }
-
-    const currentTime = Date.now();
-    const timeDiff = (currentTime - this.lastPositionTime) / 1000;
-
-    if (timeDiff > 0) {
-      const distance = this.calculateDistance(
-        this.lastPosition.coords.latitude,
-        this.lastPosition.coords.longitude,
-        position.coords.latitude,
-        position.coords.longitude
-      );
-
-      const speedKnots = (distance / timeDiff) * 3600 / 1852;
-      this.updateSpeed(speedKnots);
-
-      this.lastPosition = position;
-      this.lastPositionTime = currentTime;
-    }
-  }
-
-  updateSpeed(newSpeed: number): void {
-    this.speedHistory.push(newSpeed);
-    if (this.speedHistory.length > this.SPEED_HISTORY_LENGTH) {
-      this.speedHistory.shift();
-    }
-
-    const smoothedSpeed = this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
-    this.currentSpeed = Math.max(0, smoothedSpeed);
-    this.currentSpeed$.next(this.currentSpeed);
-
-    console.log(`🚤 Speed updated: ${this.currentSpeed.toFixed(1)} kn`);
-  }
 
   calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371e3;
@@ -526,13 +411,7 @@ export class GpsService {
     return R * c;
   }
 
-  setManualSpeed(speed: number): void {
-    this.updateSpeed(speed);
-  }
 
-  /**
-   * Get the current minimum speed threshold for position tracking
-   */
   getMinSpeedThreshold(): number {
     return this.MIN_SPEED_THRESHOLD;
   }

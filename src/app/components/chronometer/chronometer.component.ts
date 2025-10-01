@@ -3,8 +3,8 @@ import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { ChronometerState, SpeedData } from '../../interfaces/master';
 import { ChronometerService } from '../../services/chronometer.service';
-
-
+import { GpsService } from '../../services/gps.service';
+import { OdometerService } from '../../services/odometer.service';
 
 @Component({
   selector: 'app-chronometer',
@@ -13,9 +13,8 @@ import { ChronometerService } from '../../services/chronometer.service';
   styleUrl: './chronometer.component.scss',
   standalone: true
 })
-
 export class ChronometerComponent implements OnInit, OnDestroy {
-  // Current state from service
+
   currentState: ChronometerState = {
     isRunning: false,
     elapsedTime: 0,
@@ -28,12 +27,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     speedStatus: 'BELOW THRESHOLD',
     currentTime: '',
     currentDate: '',
-    currentTimezone: '',
-    utcTime: '',
-    worldTimes: [],
-    hourAngle: 0,
-    minuteAngle: 0,
-    secondAngle: 0,
     frozenStartTime: null,
     frozenStopTime: null,
     freezeStep: 0
@@ -41,9 +34,8 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   private stateSubscription?: Subscription;
   state!: ChronometerState;
-  private subscription: Subscription = new Subscription();
 
-  // Speed tracking properties
+  // Speed tracking properties - now from OdometerService
   speedData: SpeedData = {
     currentSpeed: 0,
     maxSpeed: 0,
@@ -52,13 +44,17 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     lastPosition: null
   };
 
-  private watchId: number | null = null;
-  private speedReadings: number[] = [];
   useMetric: boolean = true; // toggle between km/h and mph
+  private speedSubscription?: Subscription;
+  private maxSpeedSubscription?: Subscription;
+  private avgSpeedSubscription?: Subscription;
+  private distanceSubscription?: Subscription;
 
   constructor(
     private _cdr: ChangeDetectorRef,
-    private _chronometerService: ChronometerService
+    private _chronometerService: ChronometerService,
+    private _gpsService: GpsService,
+    private _odometerService: OdometerService
   ) {
     this.state = this._chronometerService.currentState;
   }
@@ -72,32 +68,83 @@ export class ChronometerComponent implements OnInit, OnDestroy {
         this._cdr.detectChanges();
       }
     );
-    this.initializeGeolocation();
+
+    // Initialize GPS and odometer tracking
+    this.initializeSpeedMonitoring();
+
+    // Subscribe to odometer updates
+    this.subscribeToOdometerUpdates();
   }
 
-  ngOnDestroy(): void {
-    if (this.stateSubscription) {
-      this.stateSubscription.unsubscribe();
+  /**
+   * Initialize GPS tracking and odometer
+   */
+  private initializeSpeedMonitoring(): void {
+    if ('geolocation' in navigator) {
+      // Start GPS tracking
+      this._gpsService.startTracking();
+
+      // Start odometer tracking
+      this._odometerService.startTracking();
+
+      console.log('✅ Speed monitoring initialized');
+    } else {
+      console.warn('⚠️ Geolocation not supported');
     }
-    this.stopTracking();
   }
 
-  // Chronometer methods (delegate to service)
+  /**
+   * Subscribe to all odometer observables
+   */
+  private subscribeToOdometerUpdates(): void {
+    // Current speed
+    this.speedSubscription = this._odometerService.getCurrentSpeed().subscribe(
+      speedKmh => {
+        this.speedData.currentSpeed = this.convertSpeed(speedKmh);
+        this._cdr.detectChanges();
+      }
+    );
+
+    // Max speed
+    this.maxSpeedSubscription = this._odometerService.getMaxSpeed().subscribe(
+      maxSpeedKmh => {
+        this.speedData.maxSpeed = this.convertSpeed(maxSpeedKmh);
+        this._cdr.detectChanges();
+      }
+    );
+
+    // Average speed
+    this.avgSpeedSubscription = this._odometerService.getAverageSpeed().subscribe(
+      avgSpeedKmh => {
+        this.speedData.avgSpeed = this.convertSpeed(avgSpeedKmh);
+        this._cdr.detectChanges();
+      }
+    );
+
+    // Trip distance
+    this.distanceSubscription = this._odometerService.getTripDistance().subscribe(
+      distance => {
+        this.speedData.distance = distance;
+        this._cdr.detectChanges();
+      }
+    );
+  }
+
+  /**
+   * Convert speed based on current unit preference
+   */
+  private convertSpeed(speedKmh: number): number {
+    return this.useMetric ? speedKmh : speedKmh * 0.621371; // km/h to mph
+  }
+
   startStop(): void {
     this._chronometerService.startStop();
-    if (this.currentState.isRunning) {
-      this.startSpeedTracking();
-    } else {
-      this.stopSpeedTracking();
-    }
   }
 
   reset(): void {
     this._chronometerService.reset();
-    this.resetSpeedData();
+    this._odometerService.resetTrip();
   }
-
-
 
   onFreezeTime(): void {
     this._chronometerService.freezeTime();
@@ -146,10 +193,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     return this.currentState.isRunning;
   }
 
-  // get lapTimes(): number[] {
-  //   return this.currentState.lapTimes;
-  // }
-
   get currentSpeed(): number {
     return this.currentState.currentSpeed;
   }
@@ -172,6 +215,10 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   get freezeStep(): number {
     return this.currentState.freezeStep;
+  }
+
+  get lapTimes(): number[] {
+    return this.currentState.lapTimes;
   }
 
   // Formatting methods
@@ -203,30 +250,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     return this.currentState.currentDate;
   }
 
-  getCurrentTimezone(): string {
-    return this.currentState.currentTimezone;
-  }
-
-  getUTCTime(): string {
-    return this.currentState.utcTime;
-  }
-
-  getHourAngle(): number {
-    return this.currentState.hourAngle;
-  }
-
-  getMinuteAngle(): number {
-    return this.currentState.minuteAngle;
-  }
-
-  getSecondAngle(): number {
-    return this.currentState.secondAngle;
-  }
-
-  getWorldTimes(): Array<{ city: string, time: string }> {
-    return this.currentState.worldTimes;
-  }
-
   setManualSpeed(speed: number): void {
     this._chronometerService.setManualSpeed(speed);
   }
@@ -237,121 +260,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   toggleAutoStart(): void {
     this._chronometerService.toggleAutoStart();
-  }
-
-  // Geolocation and Speed tracking methods
-  private initializeGeolocation(): void {
-    if (!navigator.geolocation) {
-      console.error('Geolocation is not supported by this browser.');
-      return;
-    }
-  }
-
-  private startSpeedTracking(): void {
-    if (!navigator.geolocation) return;
-
-    const options = {
-      enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 0
-    };
-
-    this.watchId = navigator.geolocation.watchPosition(
-      (position) => this.updateSpeed(position),
-      (error) => console.error('Geolocation error:', error),
-      options
-    );
-  }
-
-  private stopSpeedTracking(): void {
-    if (this.watchId !== null) {
-      navigator.geolocation.clearWatch(this.watchId);
-      this.watchId = null;
-    }
-  }
-
-  private stopTracking(): void {
-    this.stopSpeedTracking();
-  }
-
-  private updateSpeed(position: GeolocationPosition): void {
-    // Get speed from GPS (in m/s)
-    let speedMPS = position.coords.speed || 0;
-
-    // If speed from GPS is not available or unreliable, calculate from position changes
-    if (this.speedData.lastPosition && (!position.coords.speed || position.coords.speed < 0)) {
-      const distance = this.calculateDistance(
-        this.speedData.lastPosition.coords.latitude,
-        this.speedData.lastPosition.coords.longitude,
-        position.coords.latitude,
-        position.coords.longitude
-      );
-
-      const timeDiff = (position.timestamp - this.speedData.lastPosition.timestamp) / 1000;
-      if (timeDiff > 0) {
-        speedMPS = distance / timeDiff;
-      }
-    }
-
-    // Update current speed (convert to km/h or mph)
-    this.speedData.currentSpeed = this.useMetric
-      ? speedMPS * 3.6  // m/s to km/h
-      : speedMPS * 2.237; // m/s to mph
-
-    // Update max speed
-    if (this.speedData.currentSpeed > this.speedData.maxSpeed) {
-      this.speedData.maxSpeed = this.speedData.currentSpeed;
-    }
-
-    // Track speed readings for average calculation
-    this.speedReadings.push(speedMPS);
-
-    // Calculate average speed
-    const avgSpeedMPS = this.speedReadings.reduce((a, b) => a + b, 0) / this.speedReadings.length;
-    this.speedData.avgSpeed = this.useMetric
-      ? avgSpeedMPS * 3.6
-      : avgSpeedMPS * 2.237;
-
-    // Update distance if we have a previous position
-    if (this.speedData.lastPosition) {
-      const distanceIncrement = this.calculateDistance(
-        this.speedData.lastPosition.coords.latitude,
-        this.speedData.lastPosition.coords.longitude,
-        position.coords.latitude,
-        position.coords.longitude
-      );
-      this.speedData.distance += distanceIncrement;
-    }
-
-    this.speedData.lastPosition = position;
-    this._cdr.detectChanges();
-  }
-
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    // Haversine formula to calculate distance between two GPS coordinates
-    const R = 6371e3; // Earth's radius in meters
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) *
-      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
-  }
-
-  private resetSpeedData(): void {
-    this.speedData = {
-      currentSpeed: 0,
-      maxSpeed: 0,
-      avgSpeed: 0,
-      distance: 0,
-      lastPosition: null
-    };
-    this.speedReadings = [];
   }
 
   lap(): void {
@@ -380,17 +288,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   }
 
   getLapNumber(index: number): number {
-    // Assuming your service exposes totalLapCount
     return this._chronometerService.totalLapCount - index;
-  }
-
-  get lapTimes(): number[] {
-    return this.currentState.lapTimes;
-  }
-
-  // Formatting methods for speed display
-  formatSpeed(speed: number): string {
-    return speed.toFixed(1);
   }
 
   formatDistance(meters: number): string {
@@ -406,16 +304,67 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Toggle between metric (km/h) and imperial (mph) units
+   */
+  toggleUnits(): void {
+    this.useMetric = !this.useMetric;
+
+    // Get current values from odometer in km/h
+    const currentKmh = this._odometerService.getCurrentSpeedValue();
+    const maxKmh = this._odometerService.getMaxSpeedValue();
+    const stats = this._odometerService.getSpeedStats();
+
+    // Update display with converted values
+    this.speedData.currentSpeed = this.convertSpeed(currentKmh);
+    this.speedData.maxSpeed = this.convertSpeed(maxKmh);
+    this.speedData.avgSpeed = this.convertSpeed(stats.average);
+
+    this._cdr.detectChanges();
+  }
+
+  formatSpeed(speed: number): string {
+    return speed.toFixed(1);
+  }
+
   getSpeedUnit(): string {
     return this.useMetric ? 'km/h' : 'mph';
   }
 
-  toggleUnits(): void {
-    this.useMetric = !this.useMetric;
-    // Recalculate current displayed speeds
-    const conversionFactor = this.useMetric ? 1.60934 : 0.621371;
-    this.speedData.currentSpeed *= conversionFactor;
-    this.speedData.maxSpeed *= conversionFactor;
-    this.speedData.avgSpeed *= conversionFactor;
+  /**
+   * Get odometer statistics for display
+   */
+  getOdometerStats() {
+    return this._odometerService.getTripStats();
+  }
+
+  /**
+   * Check if currently moving
+   */
+  isMoving(): boolean {
+    return this._odometerService.isMoving();
+  }
+
+  ngOnDestroy(): void {
+    // Unsubscribe from all observables
+    if (this.stateSubscription) {
+      this.stateSubscription.unsubscribe();
+    }
+    if (this.speedSubscription) {
+      this.speedSubscription.unsubscribe();
+    }
+    if (this.maxSpeedSubscription) {
+      this.maxSpeedSubscription.unsubscribe();
+    }
+    if (this.avgSpeedSubscription) {
+      this.avgSpeedSubscription.unsubscribe();
+    }
+    if (this.distanceSubscription) {
+      this.distanceSubscription.unsubscribe();
+    }
+
+    // Stop tracking
+    this._odometerService.stopTracking();
+    this._gpsService.stopTracking();
   }
 }
