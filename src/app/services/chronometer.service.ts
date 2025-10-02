@@ -74,6 +74,126 @@ export class ChronometerService {
     };
   }
 
+  private initializeSpeedMonitoring(): void {
+    if ('geolocation' in navigator) {
+      // GPS service now handles both GPS and Odometer tracking
+      this._gpsService.startTracking();
+
+      // Start monitoring for movement to trigger zoom
+      this.monitorMovementForZoom();
+
+      console.log('✅ Speed monitoring initialized');
+    } else {
+      console.warn('⚠️ Geolocation not supported, using manual speed input');
+    }
+  }
+
+  private subscribeToGPS(): void {
+    // Subscribe to odometer speed updates
+    this.gpsSubscription = this._odometerService.getCurrentSpeed().subscribe(
+      speed => {
+        this.currentSpeed = speed;
+
+        if (this.autoStartEnabled) {
+          // Use getter method instead of direct property access
+          const threshold = this._odometerService.getMinSpeedThreshold();
+
+          // Auto-start when speed exceeds threshold
+          if (speed >= threshold && !this.isRunning) {
+            this.autoStartChronometer();
+            this._gpsService.startRouteRecording();
+          }
+          // Auto-stop when speed drops below threshold
+          else if (speed < threshold && this.isRunning) {
+            this.autoStopChronometer();
+            this._gpsService.stopRouteRecording();
+          }
+        }
+
+        this.updateState();
+      }
+    );
+  }
+
+  private updateState(): void {
+    this.stateSubject.next({
+      isRunning: this.isRunning,
+      elapsedTime: this.elapsedTime,
+      formattedTime: this.formatTime(this.elapsedTime),
+      formattedMilliseconds: this.formatMilliseconds(this.elapsedTime),
+      lapTimes: [...this.lapTimes],
+      currentSpeed: this.currentSpeed,
+      speedThreshold: this._odometerService.getMinSpeedThreshold(), // Use getter
+      autoStartEnabled: this.autoStartEnabled,
+      speedStatus: this.getSpeedStatus(),
+      currentTime: this.getCurrentTime(),
+      currentDate: this.getCurrentDate(),
+      frozenStartTime: this.frozenStartTime,
+      frozenStopTime: this.frozenStopTime,
+      freezeStep: this.freezeStep
+    });
+  }
+
+  public setSpeedThreshold(threshold: number): void {
+    // Use setter method instead of direct assignment
+    this._odometerService.setMinSpeedThreshold(threshold);
+    this.updateState();
+  }
+
+  private autoStartChronometer(): void {
+    const threshold = this._odometerService.getMinSpeedThreshold();
+    console.log(`Auto-starting chronometer: Speed ${this.currentSpeed.toFixed(1)} km/h >= ${threshold} km/h`);
+
+    if (!this.isRunning) {
+      this.startTime = Date.now() - this.elapsedTime;
+      this.isRunning = true;
+
+      this._gpsService.startRouteRecording();
+      console.log('📍 Route recording started automatically');
+    }
+  }
+
+  private autoStopChronometer(): void {
+    const threshold = this._odometerService.getMinSpeedThreshold();
+    console.log(`Auto-stopping chronometer: Speed ${this.currentSpeed.toFixed(1)} km/h < ${threshold} km/h`);
+
+    if (this.isRunning) {
+      this.isRunning = false;
+
+      this._gpsService.stopRouteRecording();
+      console.log('📍 Route recording stopped automatically');
+    }
+  }
+
+  private getSpeedStatus(): string {
+    const threshold = this._odometerService.getMinSpeedThreshold();
+
+    if (this.currentSpeed >= threshold) {
+      return 'ABOVE THRESHOLD';
+    } else {
+      return 'BELOW THRESHOLD';
+    }
+  }
+
+  // Cleanup method - should also stop GPS tracking
+  public destroy(): void {
+    if (this.timerSubscription) {
+      this.timerSubscription.unsubscribe();
+    }
+    if (this.clockSubscription) {
+      this.clockSubscription.unsubscribe();
+    }
+    if (this.gpsSubscription) {
+      this.gpsSubscription.unsubscribe();
+    }
+    if (this.movementSubscription) {
+      this.movementSubscription.unsubscribe();
+    }
+
+    // Stop GPS tracking (which also stops odometer)
+    this._gpsService.stopTracking();
+  }
+
   private initializeTimers(): void {
     // Run timers outside Angular zone to prevent interference with component lifecycle
     this._ngZone.runOutsideAngular(() => {
@@ -157,59 +277,10 @@ export class ChronometerService {
     return false;
   }
 
-
   stopSpeedMonitoring(): void {
     this.movementSubscription?.unsubscribe();
   }
 
-  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    // Simple Euclidean distance (fine for small distances)
-    return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
-  }
-
-  // Update your speed monitoring initialization
-  private initializeSpeedMonitoring(): void {
-    if ('geolocation' in navigator) {
-      this._gpsService.startTracking();
-      this._odometerService.startTracking();
-
-      // Start monitoring for movement to trigger zoom
-      this.monitorMovementForZoom();
-
-      console.log('✅ Speed monitoring initialized');
-    } else {
-      console.warn('⚠️ Geolocation not supported, using manual speed input');
-    }
-  }
-
-
-  private subscribeToGPS(): void {
-    // Subscribe to odometer speed updates (not GPS directly)
-    this.gpsSubscription = this._odometerService.getCurrentSpeed().subscribe(
-      speed => {
-        this.currentSpeed = speed;
-
-        if (this.autoStartEnabled) {
-          const threshold = this._odometerService.getMinSpeedThreshold();
-
-          // Auto-start when speed exceeds threshold
-          if (speed >= threshold && !this.isRunning) {
-            this.autoStartChronometer();
-            // 🚴 Start route recording when chronometer starts
-            this._gpsService.startRouteRecording();
-          }
-          // Auto-stop when speed drops below threshold
-          else if (speed < threshold && this.isRunning) {
-            this.autoStopChronometer();
-            // 🛑 Stop route recording when chronometer stops
-            this._gpsService.stopRouteRecording();
-          }
-        }
-
-        this.updateState();
-      }
-    );
-  }
 
   resetSpeedMonitoring(): void {
     this._odometerService.resetTripStats();
@@ -217,27 +288,6 @@ export class ChronometerService {
     console.log('🔄 Speed monitoring reset');
   }
 
-  private updateState(): void {
-    this.stateSubject.next({
-      isRunning: this.isRunning,
-      elapsedTime: this.elapsedTime,
-      formattedTime: this.formatTime(this.elapsedTime),
-      formattedMilliseconds: this.formatMilliseconds(this.elapsedTime),
-      lapTimes: [...this.lapTimes],
-      currentSpeed: this.currentSpeed,
-      speedThreshold: this._gpsService.MIN_SPEED_THRESHOLD,
-      autoStartEnabled: this.autoStartEnabled,
-      speedStatus: this.getSpeedStatus(),
-      currentTime: this.getCurrentTime(),
-      currentDate: this.getCurrentDate(),
-      // Add frozen time properties only after updating ChronometerState interface
-      frozenStartTime: this.frozenStartTime,
-      frozenStopTime: this.frozenStopTime,
-      freezeStep: this.freezeStep
-    });
-  }
-
-  // Chronometer control methods
   public startStop(): void {
     if (this.isRunning) {
       this.isRunning = false;
@@ -268,7 +318,6 @@ export class ChronometerService {
       this.updateState();
     }
   }
-
 
   public freezeTime(): void {
     const currentTime = this.getCurrentTime();
@@ -341,42 +390,14 @@ export class ChronometerService {
     }
   }
 
-  // Speed monitoring methods
   public updateSpeed(speed: number): void {
     // Delegate to GPS service which will emit updates
     this._odometerService.setManualSpeed(speed);
   }
 
-  private autoStartChronometer(): void {
-    console.log(`Auto-starting chronometer: Speed ${this.currentSpeed.toFixed(1)} kn >= ${this._gpsService.MIN_SPEED_THRESHOLD} km/h`);
-    if (!this.isRunning) {
-      this.startTime = Date.now() - this.elapsedTime;
-      this.isRunning = true;
-
-      // 🚴 Start route recording when chronometer auto-starts
-      this._gpsService.startRouteRecording();
-      console.log('📍 Route recording started automatically');
-    }
-  }
-
-  private autoStopChronometer(): void {
-    console.log(`Auto-stopping chronometer: Speed ${this.currentSpeed.toFixed(1)} kn < ${this._gpsService.MIN_SPEED_THRESHOLD} km/h`);
-    if (this.isRunning) {
-      this.isRunning = false;
-
-      // 🛑 Stop route recording when chronometer auto-stops
-      this._gpsService.stopRouteRecording();
-      console.log('📍 Route recording stopped automatically');
-    }
-  }
 
   public setManualSpeed(speed: number): void {
     this._odometerService.setManualSpeed(speed);
-  }
-
-  public setSpeedThreshold(threshold: number): void {
-    this._gpsService.MIN_SPEED_THRESHOLD = threshold;
-    this.updateState();
   }
 
   public toggleAutoStart(): void {
@@ -407,14 +428,6 @@ export class ChronometerService {
     return speed.toFixed(1);
   }
 
-  private getSpeedStatus(): string {
-    if (this.currentSpeed >= this._gpsService.MIN_SPEED_THRESHOLD) {
-      return 'ABOVE THRESHOLD';
-    } else {
-      return 'BELOW THRESHOLD';
-    }
-  }
-
   private getCurrentTime(): string {
     const now = new Date();
     return now.toLocaleTimeString('en-US', {
@@ -435,37 +448,6 @@ export class ChronometerService {
     });
   }
 
-  private getCurrentTimezone(): string {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return timezone.split('/').pop() || 'LOCAL';
-  }
-
-  private getUTCTime(): string {
-    const now = new Date();
-    return now.toUTCString().split(' ')[4];
-  }
-
-  private getHourAngle(): number {
-    const now = new Date();
-    const hours = now.getHours() % 12;
-    const minutes = now.getMinutes();
-    return (hours * 30) + (minutes * 0.5);
-  }
-
-  private getMinuteAngle(): number {
-    const now = new Date();
-    const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
-    return (minutes * 6) + (seconds * 0.1);
-  }
-
-  private getSecondAngle(): number {
-    const now = new Date();
-    const seconds = now.getSeconds();
-    const milliseconds = now.getMilliseconds();
-    return (seconds * 6) + (milliseconds * 0.006);
-  }
-
   public get currentState(): ChronometerState {
     return this.stateSubject.value;
   }
@@ -478,16 +460,4 @@ export class ChronometerService {
     return this.elapsedTime;
   }
 
-  // Cleanup method
-  public destroy(): void {
-    if (this.timerSubscription) {
-      this.timerSubscription.unsubscribe();
-    }
-    if (this.clockSubscription) {
-      this.clockSubscription.unsubscribe();
-    }
-    if (this.gpsSubscription) {
-      this.gpsSubscription.unsubscribe();
-    }
-  }
 }

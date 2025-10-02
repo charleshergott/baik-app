@@ -2,11 +2,9 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { OdometerStats, Position, SpeedStats } from '../interfaces/master';
 
-
 @Injectable({
   providedIn: 'root'
 })
-
 export class OdometerService implements OnDestroy {
 
   // Speed tracking
@@ -25,23 +23,23 @@ export class OdometerService implements OnDestroy {
   private tripDistance = 0;
   private totalDistance = 0;
   private maxSpeed = 0;
-  private lastPositionTime = 0
+  private lastPositionTime = 0;
   private SPEED_HISTORY_LENGTH = 5;
   private movingTime = 0;
   private totalTime = 0;
   private tripStartTime: number | null = null;
   private lastUpdateTime: number | null = null;
   private MAX_REALISTIC_SPEED_KMH = 80;
+
   // Tracking state
   private isTracking = false;
   private lastPosition: Position | null = null;
   private MAX_ACCELERATION_MS2 = 5; // Maximum realistic acceleration in m/s²
+
   // Subscriptions
   private positionSubscription?: Subscription;
 
-  constructor(
-  ) {
-  }
+  constructor() { }
 
   ngOnDestroy(): void {
     this.stopTracking();
@@ -54,11 +52,10 @@ export class OdometerService implements OnDestroy {
     this.currentSpeed = Math.max(0, speedKmh);
     this.currentSpeed$.next(this.currentSpeed);
 
-    // Update max speed only if realistic (GPS service already filters this)
+    // Update max speed only if realistic
     if (this.currentSpeed > this.maxSpeed) {
       const maxRealistic = this.getMaxRealisticSpeed();
 
-      // Double-check it's realistic
       if (this.currentSpeed <= maxRealistic) {
         this.maxSpeed = this.currentSpeed;
         this.maxSpeed$.next(this.maxSpeed);
@@ -69,6 +66,8 @@ export class OdometerService implements OnDestroy {
 
   calculateSpeed(lat: number, lon: number, timestamp: number): number {
     if (!this.lastPosition || !this.lastPositionTime) {
+      this.lastPosition = { latitude: lat, longitude: lon, timestamp };
+      this.lastPositionTime = timestamp;
       return 0;
     }
 
@@ -96,7 +95,7 @@ export class OdometerService implements OnDestroy {
 
     // Filter: Check for unrealistic acceleration
     if (this.currentSpeed > 0) {
-      const lastSpeedMs = this.currentSpeed / 3.6; // Convert km/h to m/s
+      const lastSpeedMs = this.currentSpeed / 3.6;
       const acceleration = Math.abs(speedMs - lastSpeedMs) / timeDiff;
 
       if (acceleration > this.MAX_ACCELERATION_MS2) {
@@ -104,6 +103,10 @@ export class OdometerService implements OnDestroy {
         return 0;
       }
     }
+
+    // Update last position for next calculation
+    this.lastPosition = { latitude: lat, longitude: lon, timestamp };
+    this.lastPositionTime = timestamp;
 
     return speedKmh;
   }
@@ -123,7 +126,7 @@ export class OdometerService implements OnDestroy {
   }
 
   calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371e3;
+    const R = 6371e3; // Earth's radius in meters
     const φ1 = lat1 * Math.PI / 180;
     const φ2 = lat2 * Math.PI / 180;
     const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -137,6 +140,47 @@ export class OdometerService implements OnDestroy {
     return R * c;
   }
 
+  /**
+   * NEW: Update trip distance with meters traveled
+   */
+  updateTripDistance(meters: number): void {
+    if (!this.isTracking) return;
+
+    // Only count distance if moving above threshold
+    if (this.currentSpeed >= this.MIN_SPEED_THRESHOLD) {
+      this.tripDistance += meters;
+      this.tripDistance$.next(this.tripDistance);
+    }
+  }
+
+  /**
+   * NEW: Update total distance with meters traveled
+   */
+  updateTotalDistance(meters: number): void {
+    if (!this.isTracking) return;
+
+    // Only count distance if moving above threshold
+    if (this.currentSpeed >= this.MIN_SPEED_THRESHOLD) {
+      this.totalDistance += meters;
+      this.totalDistance$.next(this.totalDistance);
+    }
+  }
+
+  /**
+   * NEW: Update time tracking
+   */
+  updateTimeTracking(timeDiff: number): void {
+    if (!this.isTracking) return;
+
+    this.totalTime += timeDiff;
+
+    if (this.currentSpeed >= this.MIN_SPEED_THRESHOLD) {
+      this.movingTime += timeDiff;
+    }
+
+    this.updateAverageSpeed();
+  }
+
   setMaxRealisticSpeed(speedKmh: number): void {
     this.MAX_REALISTIC_SPEED_KMH = speedKmh;
     console.log(`🎯 Max realistic speed set to ${speedKmh} km/h`);
@@ -145,7 +189,6 @@ export class OdometerService implements OnDestroy {
   getMaxRealisticSpeed(): number {
     return this.MAX_REALISTIC_SPEED_KMH;
   }
-
 
   updateAverageSpeed(): void {
     if (this.movingTime > 0) {
@@ -169,7 +212,9 @@ export class OdometerService implements OnDestroy {
   stopTracking(): void {
     this.isTracking = false;
     this.lastPosition = null;
+    this.lastPositionTime = 0;
     this.lastUpdateTime = null;
+    this.speedHistory = [];
     console.log('🛑 Odometer tracking stopped');
   }
 
@@ -204,6 +249,7 @@ export class OdometerService implements OnDestroy {
     console.log(`🎚️ Min speed threshold set to ${this.MIN_SPEED_THRESHOLD} km/h`);
   }
 
+  // Observable getters
   getCurrentSpeed(): Observable<number> {
     return this.currentSpeed$.asObservable();
   }
@@ -225,7 +271,6 @@ export class OdometerService implements OnDestroy {
   }
 
   // Synchronous getters
-
   getCurrentSpeedValue(): number {
     return this.currentSpeed;
   }
@@ -244,6 +289,14 @@ export class OdometerService implements OnDestroy {
 
   getMinSpeedThreshold(): number {
     return this.MIN_SPEED_THRESHOLD;
+  }
+
+  getMovingTime(): number {
+    return this.movingTime;
+  }
+
+  getTotalTime(): number {
+    return this.totalTime;
   }
 
   getTripStats(): OdometerStats {

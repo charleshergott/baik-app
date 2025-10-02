@@ -155,3 +155,21 @@ export interface OdometerStats {
     movingTime: number; // time spent moving (above threshold)
     totalTime: number; // total elapsed time
 }
+
+export type MockScenario =
+    | 'stationary'
+    | 'slow_ride'
+    | 'normal_ride'
+    | 'fast_ride'
+    | 'stop_and_go'
+    | 'acceleration'
+    | 'custom';
+
+export interface MockGPSConfig {
+    scenario: MockScenario;
+    updateInterval: number; // milliseconds
+    startPosition?: { lat: number; lon: number };
+    customSpeed?: number; // km/h
+    customAccuracy?: number; // meters
+    enableNoise?: boolean; // Add realistic GPS jitter
+}
