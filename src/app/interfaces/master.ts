@@ -7,6 +7,7 @@ export interface Position {
     heading?: number;
     speed?: number;
     timestamp: number;
+    accuracy?: number;
 }
 
 export interface ItineraryPoint {

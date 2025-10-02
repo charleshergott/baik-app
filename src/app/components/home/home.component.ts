@@ -8,6 +8,7 @@ import { filter, Subscription, take } from 'rxjs';
 import { ChronometerComponent } from '../chronometer/chronometer.component';
 
 import * as L from 'leaflet';
+import { ChronometerService } from '../../services/chronometer.service';
 
 
 @Component({
@@ -75,6 +76,8 @@ export class HomeComponent {
   private animationInterval: any;
   private gpsSubscription?: Subscription;
   rollSpeed = 2000; // milliseconds per roll
+  private readonly BIKING_ZOOM_LEVEL = 18;
+  private movementZoomSubscription?: Subscription;
 
   //--==========================================================================================
 
@@ -82,7 +85,8 @@ export class HomeComponent {
     public _gpsService: GpsService,
     private _alertService: AlertService,
     private _cdr: ChangeDetectorRef,
-    private _ngZone: NgZone
+    private _ngZone: NgZone,
+    private _chronometerService: ChronometerService
   ) {
     this.checkIfMobile();
 
@@ -103,6 +107,16 @@ export class HomeComponent {
         });
       }, 50);
     });
+
+    this.movementZoomSubscription = this._chronometerService.onMovementDetected()
+      .subscribe(position => {
+        console.log('🗺️ Zooming map to user position:', position);
+        this.map.setView(
+          [position.lat, position.lng],
+          this.BIKING_ZOOM_LEVEL,
+          { animate: true, duration: 1 }
+        );
+      });
 
     // Load saved routes on init
     this.loadSavedRoutes();
@@ -507,5 +521,6 @@ export class HomeComponent {
     if (this.routeSubscription) {
       this.routeSubscription.unsubscribe();
     }
+    this.movementZoomSubscription?.unsubscribe();
   }
 }

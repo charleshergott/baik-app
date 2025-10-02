@@ -1,5 +1,5 @@
 import { Injectable, NgZone } from '@angular/core';
-import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, interval, Subscription, Subject } from 'rxjs';
 import { GpsService } from './gps.service';
 import { ChronometerState } from '../interfaces/master';
 import { OdometerService } from './odometer.service';
@@ -22,7 +22,12 @@ export class ChronometerService {
   private currentSpeed = 0;
 
   private autoStartEnabled = true;
-
+  private hasZoomedOnMovement = false;
+  private readonly BIKING_ZOOM_LEVEL = 16; // Good zoom level for biking (13-18 is typical)
+  private previousPosition: { lat: number; lng: number } | null = null;
+  private movementSubscription?: Subscription;
+  private movementDetected$ = new Subject<{ lat: number; lng: number }>();
+  private hasDetectedMovement = false;
   // Time freezing properties
   private frozenStartTime: string | null = null;
   private frozenStopTime: string | null = null;
@@ -105,13 +110,71 @@ export class ChronometerService {
     });
   }
 
+  onMovementDetected(): Observable<{ lat: number; lng: number }> {
+    return this.movementDetected$.asObservable();
+  }
+
+  private monitorMovementForZoom(): void {
+    this.hasDetectedMovement = false; // Reset flag
+
+    this.movementSubscription = this._gpsService.getCurrentPosition().subscribe(position => {
+      if (!position || this.hasDetectedMovement) return;
+
+      const currentPos = { lat: position.latitude, lng: position.longitude };
+
+      // Check if user is actually moving
+      if (this.isUserMoving(currentPos, position.speed)) {
+        console.log('🚴 Movement detected in chronometer service');
+
+        // Emit the position to any subscribers (the component)
+        this.movementDetected$.next(currentPos);
+        this.hasDetectedMovement = true;
+      }
+
+      this.previousPosition = currentPos;
+    });
+  }
+
+  private isUserMoving(currentPos: { lat: number; lng: number }, speed?: number): boolean {
+    // Method 1: Check speed if available (in m/s)
+    if (speed !== undefined && speed !== null && speed > 0.5) {
+      return true;
+    }
+
+    // Method 2: Check distance from previous position
+    if (this.previousPosition) {
+      const distance = this._gpsService.calculateDistance(
+        this.previousPosition.lat,
+        this.previousPosition.lng,
+        currentPos.lat,
+        currentPos.lng
+      );
+
+      // If moved more than 10 meters
+      return distance > 10;
+    }
+
+    return false;
+  }
+
+
+  stopSpeedMonitoring(): void {
+    this.movementSubscription?.unsubscribe();
+  }
+
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    // Simple Euclidean distance (fine for small distances)
+    return Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
+  }
+
+  // Update your speed monitoring initialization
   private initializeSpeedMonitoring(): void {
     if ('geolocation' in navigator) {
-      // Start GPS tracking
       this._gpsService.startTracking();
-
-      // Start odometer tracking (which subscribes to GPS positions)
       this._odometerService.startTracking();
+
+      // Start monitoring for movement to trigger zoom
+      this.monitorMovementForZoom();
 
       console.log('✅ Speed monitoring initialized');
     } else {
@@ -119,9 +182,7 @@ export class ChronometerService {
     }
   }
 
-  /**
-   * Subscribe to speed updates from the odometer service
-   */
+
   private subscribeToGPS(): void {
     // Subscribe to odometer speed updates (not GPS directly)
     this.gpsSubscription = this._odometerService.getCurrentSpeed().subscribe(
@@ -150,24 +211,7 @@ export class ChronometerService {
     );
   }
 
-  private stopSpeedMonitoring(): void {
-    // Unsubscribe from speed updates
-    if (this.gpsSubscription) {
-      this.gpsSubscription.unsubscribe();
-    }
 
-    // Stop odometer tracking
-    this._odometerService.stopTracking();
-
-    // Stop GPS tracking
-    this._gpsService.stopTracking();
-
-    console.log('🛑 Speed monitoring stopped');
-  }
-
-  /**
-   * Reset speed monitoring (useful for new trip)
-   */
   resetSpeedMonitoring(): void {
     this._odometerService.resetTrip();
     this.currentSpeed = 0;
