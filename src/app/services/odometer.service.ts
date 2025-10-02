@@ -1,25 +1,21 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
-import { filter, pairwise } from 'rxjs/operators';
+import { filter } from 'rxjs/operators';
 import { OdometerStats, Position, SpeedStats } from '../interfaces/master';
 import { GpsService } from './gps.service';
 import * as geolib from 'geolib';
 
-
 @Injectable({
   providedIn: 'root'
 })
-
 export class OdometerService implements OnDestroy {
 
   // Speed tracking
   private currentSpeed$ = new BehaviorSubject<number>(0);
   private currentSpeed = 0;
-  private speedHistory: number[] = [];
-  private readonly SPEED_HISTORY_LENGTH = 5;
 
   // Thresholds
-  MIN_SPEED_THRESHOLD = 5; // km/h
+  MIN_SPEED_THRESHOLD = 8; // km/h - match GPS service
 
   // Trip statistics
   private tripDistance$ = new BehaviorSubject<number>(0);
@@ -39,18 +35,11 @@ export class OdometerService implements OnDestroy {
   private isTracking = false;
   private lastPosition: Position | null = null;
 
-  // Kalman filter for GPS smoothing (optional enhancement)
-  private useKalmanFilter = false;
-  private filteredLat: number | null = null;
-  private filteredLon: number | null = null;
-  private readonly KALMAN_R = 0.008; // Process noise
-  private readonly KALMAN_Q = 3; // Measurement noise (meters)
-
   // Subscriptions
   private positionSubscription?: Subscription;
 
   constructor(private gpsService: GpsService) {
-    this.initializePositionTracking();
+    this.initializeTracking();
   }
 
   ngOnDestroy(): void {
@@ -61,119 +50,82 @@ export class OdometerService implements OnDestroy {
   }
 
   /**
-   * Initialize position tracking to calculate speed and distance
+   * Initialize tracking - use GPS service's filtered data
    */
-  private initializePositionTracking(): void {
+  private initializeTracking(): void {
     this.positionSubscription = this.gpsService.getCurrentPosition().pipe(
-      filter(position => position !== null),
-      pairwise()
-    ).subscribe(([prevPos, currPos]) => {
-      if (this.isTracking && prevPos && currPos) {
-        this.processPositionUpdate(prevPos, currPos);
+      filter(position => position !== null)
+    ).subscribe(currPos => {
+      if (this.isTracking && currPos) {
+        this.processPositionUpdate(currPos);
       }
     });
   }
 
   /**
-   * Process position updates using Geolib for accurate calculations
+   * Process position updates - use filtered speed from GPS service
    */
-  private processPositionUpdate(prevPos: Position, currPos: Position): void {
+  private processPositionUpdate(currPos: Position): void {
     const currentTime = Date.now();
-    const timeDiff = (currentTime - (prevPos.timestamp || 0)) / 1000; // seconds
 
-    if (timeDiff <= 0 || timeDiff > 10) {
-      this.lastPosition = currPos;
-      this.lastUpdateTime = currentTime;
+    // Skip if GPS is warming up
+    if (this.gpsService.isGpsWarmingUp()) {
+      console.log('⏳ Odometer waiting for GPS warmup...');
       return;
     }
 
-    // Apply Kalman filter if enabled (reduces GPS jitter)
-    let lat = currPos.latitude;
-    let lon = currPos.longitude;
+    // Get the already-filtered speed from GPS service (in knots)
+    const speedKnots = this.gpsService.currentSpeed;
+    const speedKmh = speedKnots * 1.852; // Convert knots to km/h
 
-    if (this.useKalmanFilter) {
-      const filtered = this.applyKalmanFilter(lat, lon);
-      lat = filtered.latitude;
-      lon = filtered.longitude;
-    }
-
-    // Calculate distance using Geolib (more accurate than basic Haversine)
-    const distance = geolib.getDistance(
-      { latitude: prevPos.latitude, longitude: prevPos.longitude },
-      { latitude: lat, longitude: lon },
-      1 // 1 meter accuracy
-    );
-
-    // Calculate speed using Geolib (returns m/s)
-    const speedMs = geolib.getSpeed(
-      { latitude: prevPos.latitude, longitude: prevPos.longitude, time: prevPos.timestamp },
-      { latitude: lat, longitude: lon, time: currentTime }
-    ) || 0;
-
-    // Convert m/s to km/h
-    const speedKmh = speedMs * 3.6;
-
-    // Alternative: calculate speed manually if preferred
-    // const speedKmh = (distance / timeDiff) * 3.6;
-
-    // Update speed with smoothing
+    // Update speed directly from GPS service (already filtered and smoothed)
     this.updateSpeed(speedKmh);
 
-    // Update distance
-    this.updateDistance(distance);
+    // Calculate distance if we have a previous position
+    if (this.lastPosition && this.lastUpdateTime) {
+      const timeDiff = (currentTime - this.lastUpdateTime) / 1000; // seconds
 
-    // Update time tracking
-    this.updateTimeTracking(timeDiff, this.currentSpeed);
+      if (timeDiff > 0 && timeDiff <= 10) {
+        // Calculate distance using Geolib
+        const distance = geolib.getDistance(
+          { latitude: this.lastPosition.latitude, longitude: this.lastPosition.longitude },
+          { latitude: currPos.latitude, longitude: currPos.longitude },
+          1 // 1 meter accuracy
+        );
 
-    // Update average speed
-    this.updateAverageSpeed();
+        // Update distance tracking
+        this.updateDistance(distance);
+
+        // Update time tracking
+        this.updateTimeTracking(timeDiff, speedKmh);
+
+        // Update average speed
+        this.updateAverageSpeed();
+      }
+    }
 
     this.lastPosition = currPos;
     this.lastUpdateTime = currentTime;
   }
 
   /**
-   * Simple Kalman filter to smooth GPS coordinates
+   * Update current speed - now just stores the filtered value from GPS
    */
-  private applyKalmanFilter(lat: number, lon: number): { latitude: number, longitude: number } {
-    if (this.filteredLat === null || this.filteredLon === null) {
-      this.filteredLat = lat;
-      this.filteredLon = lon;
-      return { latitude: lat, longitude: lon };
-    }
-
-    // Simple 1D Kalman filter for each coordinate
-    this.filteredLat = this.filteredLat + this.KALMAN_R * (lat - this.filteredLat);
-    this.filteredLon = this.filteredLon + this.KALMAN_R * (lon - this.filteredLon);
-
-    return {
-      latitude: this.filteredLat,
-      longitude: this.filteredLon
-    };
-  }
-
-  /**
-   * Update current speed with smoothing
-   */
-  private updateSpeed(newSpeed: number): void {
-    // Add to history for smoothing
-    this.speedHistory.push(newSpeed);
-    if (this.speedHistory.length > this.SPEED_HISTORY_LENGTH) {
-      this.speedHistory.shift();
-    }
-
-    // Calculate smoothed speed
-    const smoothedSpeed = this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
-    this.currentSpeed = Math.max(0, smoothedSpeed);
+  private updateSpeed(speedKmh: number): void {
+    this.currentSpeed = Math.max(0, speedKmh);
     this.currentSpeed$.next(this.currentSpeed);
 
-    // Update max speed
+    // Update max speed only if realistic (GPS service already filters this)
     if (this.currentSpeed > this.maxSpeed) {
-      this.maxSpeed = this.currentSpeed;
-      this.maxSpeed$.next(this.maxSpeed);
-    }
+      const maxRealistic = this.gpsService.getMaxRealisticSpeed();
 
-    console.log(`🚴 Speed: ${this.currentSpeed.toFixed(1)} km/h (Max: ${this.maxSpeed.toFixed(1)} km/h)`);
+      // Double-check it's realistic
+      if (this.currentSpeed <= maxRealistic) {
+        this.maxSpeed = this.currentSpeed;
+        this.maxSpeed$.next(this.maxSpeed);
+        console.log(`🏆 New max speed: ${this.maxSpeed.toFixed(1)} km/h`);
+      }
+    }
   }
 
   /**
@@ -187,6 +139,8 @@ export class OdometerService implements OnDestroy {
 
       this.tripDistance$.next(this.tripDistance);
       this.totalDistance$.next(this.totalDistance);
+
+      console.log(`📏 Distance: ${(this.tripDistance / 1000).toFixed(2)} km, Speed: ${this.currentSpeed.toFixed(1)} km/h`);
     }
   }
 
@@ -232,18 +186,6 @@ export class OdometerService implements OnDestroy {
   }
 
   /**
-   * Enable/disable Kalman filtering for GPS smoothing
-   */
-  setKalmanFilterEnabled(enabled: boolean): void {
-    this.useKalmanFilter = enabled;
-    if (!enabled) {
-      this.filteredLat = null;
-      this.filteredLon = null;
-    }
-    console.log(`🔧 Kalman filter: ${enabled ? 'ENABLED' : 'DISABLED'}`);
-  }
-
-  /**
    * Start tracking speed and distance
    */
   startTracking(): void {
@@ -265,8 +207,6 @@ export class OdometerService implements OnDestroy {
     this.isTracking = false;
     this.lastPosition = null;
     this.lastUpdateTime = null;
-    this.filteredLat = null;
-    this.filteredLon = null;
     console.log('🛑 Odometer tracking stopped');
   }
 
@@ -279,10 +219,7 @@ export class OdometerService implements OnDestroy {
     this.movingTime = 0;
     this.totalTime = 0;
     this.tripStartTime = null;
-    this.speedHistory = [];
     this.currentSpeed = 0;
-    this.filteredLat = null;
-    this.filteredLon = null;
 
     this.tripDistance$.next(0);
     this.maxSpeed$.next(0);

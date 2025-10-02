@@ -13,6 +13,7 @@ import { OdometerService } from '../../services/odometer.service';
   styleUrl: './chronometer.component.scss',
   standalone: true
 })
+
 export class ChronometerComponent implements OnInit, OnDestroy {
 
   currentState: ChronometerState = {
