@@ -68,15 +68,8 @@ export class OdometerService implements OnDestroy {
   private processPositionUpdate(currPos: Position): void {
     const currentTime = Date.now();
 
-    // Skip if GPS is warming up
-    if (this.gpsService.isGpsWarmingUp()) {
-      console.log('⏳ Odometer waiting for GPS warmup...');
-      return;
-    }
-
-    // Get the already-filtered speed from GPS service (in knots)
-    const speedKnots = this.gpsService.currentSpeed;
-    const speedKmh = speedKnots * 1.852; // Convert knots to km/h
+    // Get the already-filtered speed from GPS service (in km/h)
+    const speedKmh = this.gpsService.currentSpeed;
 
     // Update speed directly from GPS service (already filtered and smoothed)
     this.updateSpeed(speedKmh);
