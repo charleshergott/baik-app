@@ -9,6 +9,7 @@ import { ChronometerComponent } from '../chronometer/chronometer.component';
 
 import * as L from 'leaflet';
 import { ChronometerService } from '../../services/chronometer.service';
+import { OdometerService } from '../../services/odometer.service';
 
 
 @Component({
@@ -86,7 +87,8 @@ export class HomeComponent {
     private _alertService: AlertService,
     private _cdr: ChangeDetectorRef,
     private _ngZone: NgZone,
-    private _chronometerService: ChronometerService
+    private _chronometerService: ChronometerService,
+    private _odometerService: OdometerService
   ) {
     this.checkIfMobile();
 
@@ -190,7 +192,7 @@ export class HomeComponent {
 
     // Update stats
     if (this.isRecordingRoute) {
-      this.currentRouteStats = this._gpsService.getRouteStats();
+      this.currentRouteStats = this._gpsService.getRouteStatsToTraceRouteOnMap();
     }
   }
 
@@ -226,19 +228,23 @@ export class HomeComponent {
     }
 
     this.stopRecording();
+    const stats = this._odometerService.getTripStats();
 
-    const stats = this._gpsService.getRouteStats();
-    const distanceKm = (stats.distance / 1000).toFixed(1);
-    const durationMin = Math.floor(stats.duration / 60);
+    // Use correct property names from OdometerStats
+    const distanceKm = (stats.tripDistance / 1000).toFixed(2); // Changed to .toFixed(2) for better precision
+    const durationMin = Math.floor(stats.movingTime / 60); // Use movingTime, not duration
 
     const name = prompt(
-      `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} kmh\n\nEnter a name:`,
+      `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} km/h\nAvg Speed: ${stats.averageSpeed.toFixed(1)} km/h\n\nEnter a name:`,
       `Ride ${distanceKm}km`
     );
 
     if (name) {
       try {
-        const id = await this._gpsService.saveCurrentRoute(name);
+        // Pass the stats to saveCurrentRoute so it uses odometer data
+        const description = `Distance: ${distanceKm}km, Duration: ${durationMin}min, Max: ${stats.maxSpeed.toFixed(1)}km/h, Avg: ${stats.averageSpeed.toFixed(1)}km/h`;
+        const id = await this._gpsService.saveCurrentRoute(name, description);
+
         console.log('💾 Route saved with ID:', id);
         alert(`Route "${name}" saved successfully!`);
         await this.loadSavedRoutes();

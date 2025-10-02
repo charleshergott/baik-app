@@ -144,7 +144,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   reset(): void {
     this._chronometerService.reset();
-    this._odometerService.resetTrip();
+    this._odometerService.resetTripStats();
   }
 
   onFreezeTime(): void {
@@ -305,9 +305,6 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Toggle between metric (km/h) and imperial (mph) units
-   */
   toggleUnits(): void {
     this.useMetric = !this.useMetric;
 
@@ -332,16 +329,10 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     return this.useMetric ? 'km/h' : 'mph';
   }
 
-  /**
-   * Get odometer statistics for display
-   */
   getOdometerStats() {
     return this._odometerService.getTripStats();
   }
 
-  /**
-   * Check if currently moving
-   */
   isMoving(): boolean {
     return this._odometerService.isMoving();
   }

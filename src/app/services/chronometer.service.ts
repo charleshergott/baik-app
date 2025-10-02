@@ -143,7 +143,7 @@ export class ChronometerService {
 
     // Method 2: Check distance from previous position
     if (this.previousPosition) {
-      const distance = this._gpsService.calculateDistance(
+      const distance = this._odometerService.calculateDistance(
         this.previousPosition.lat,
         this.previousPosition.lng,
         currentPos.lat,
@@ -211,25 +211,10 @@ export class ChronometerService {
     );
   }
 
-
   resetSpeedMonitoring(): void {
-    this._odometerService.resetTrip();
+    this._odometerService.resetTripStats();
     this.currentSpeed = 0;
     console.log('🔄 Speed monitoring reset');
-  }
-
-  /**
-   * Get current speed statistics
-   */
-  getSpeedStats() {
-    return this._odometerService.getSpeedStats();
-  }
-
-  /**
-   * Get trip statistics
-   */
-  getTripStats() {
-    return this._odometerService.getTripStats();
   }
 
   private updateState(): void {

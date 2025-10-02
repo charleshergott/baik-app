@@ -1,11 +1,14 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, filter, Observable, Subscription } from 'rxjs';
 import { Position, SavedRoute, Waypoint } from '../interfaces/master';
 import { environment } from '../environments/environment.prod';
+import { OdometerService } from './odometer.service';
+import * as geolib from 'geolib';
 
 @Injectable({
   providedIn: 'root'
 })
+
 export class GpsService {
 
   private currentPosition$ = new BehaviorSubject<Position | null>(null);
@@ -17,16 +20,28 @@ export class GpsService {
   isGPSEnabled = false;
   private lastPosition: Position | null = null;
   private lastPositionTime = 0;
-  currentSpeed = 0; // in kmh
-
-  // Enhanced filtering parameters
-  private SPEED_HISTORY_LENGTH = 5;
+  currentSpeed = 0; // in km/h
+  private tripDistance$ = new BehaviorSubject<number>(0);
+  private totalDistance$ = new BehaviorSubject<number>(0);
+  private maxSpeed$ = new BehaviorSubject<number>(0);
+  private averageSpeed$ = new BehaviorSubject<number>(0);
   private speedHistory: number[] = [];
+  private tripDistance = 0;
+  private totalDistance = 0;
+  private maxSpeed = 0;
+  private SPEED_HISTORY_LENGTH = 5;
+  private movingTime = 0;
+  private totalTime = 0;
+  private tripStartTime: number | null = null;
+  // Enhanced filtering parameters
+
   MIN_SPEED_THRESHOLD = 5; // Minimum speed in km/h to consider as "moving"
   private MAX_ACCURACY_THRESHOLD = 20; // meters - ignore readings worse than this
-  private STATIONARY_ACCURACY_MULTIPLIER = 2; // Use 2x accuracy as stationary radius
   private MAX_REALISTIC_SPEED_KMH = 80; // Maximum realistic speed for a bike in km/h
-  private MAX_ACCELERATION_MS2 = 5; // Maximum realistic acceleration in m/s² (bikes ~3-5)
+
+
+  // GPS initialization
+  private isFirstReading = true; // Flag to ignore very first GPS lock
 
   // Kalman filter variables for position smoothing
   private kalmanLat: number | null = null;
@@ -34,22 +49,19 @@ export class GpsService {
   private kalmanVariance = 1000; // Initial high uncertainty
   private PROCESS_NOISE = 0.5;
 
-  // GPS warm-up parameters
-  private gpsWarmupStartTime: number = 0;
-  private readonly GPS_WARMUP_DURATION = 5000; // 5 seconds warmup period
-  private readonly MIN_READINGS_FOR_MOVEMENT = 3; // Need 3 consistent readings to confirm movement
-  private movementReadingsCount = 0;
-  private isFirstReading = true;
-  private hasBeenMoving = false;
-
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
   private isRecordingRoute = false;
   private routeStartTime: number = 0;
   private routeDistance: number = 0;
   private routeMaxSpeed: number = 0;
-  private MIN_DISTANCE_BETWEEN_POINTS = 5; // meters
-
+  private routeMovingTime: number = 0; // Cumulative moving time in seconds
+  private lastMovingTimestamp: number = 0; // Last time we were moving
+  private stationaryCount: number = 0; // Count consecutive stationary readings
+  private readonly STATIONARY_THRESHOLD = 3; // 3 consecutive readings before pausing timer
+  private isCurrentlyMoving: boolean = false;
+  private readonly MIN_DISTANCE_BETWEEN_POINTS = 5; // meters
+  private lastUpdateTime: number | null = null;
   // IndexedDB
   private db: IDBDatabase | null = null;
   private dbInitialized: Promise<void>;
@@ -57,14 +69,18 @@ export class GpsService {
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'routes';
   private isDevelopmentMode = environment.enableMockGPS;
+  private positionSubscription?: Subscription;
 
   // GPS Quality tracking
   currentAccuracy: number = 0;
   gpsQuality$ = new BehaviorSubject<'excellent' | 'good' | 'fair' | 'poor'>('poor');
 
-  constructor() {
+  constructor(
+    private _odometerService: OdometerService
+  ) {
     console.log(`🔧 GPS Service: ${this.isDevelopmentMode ? 'MOCK MODE' : 'REAL MODE'}`);
     this.dbInitialized = this.initIndexedDB();
+    this.initializeTracking();
   }
 
   private async initIndexedDB(): Promise<void> {
@@ -113,12 +129,86 @@ export class GpsService {
     return this.gpsQuality$.asObservable();
   }
 
+  /**
+  * Initialize tracking - use GPS service's filtered data
+  */
+  private initializeTracking(): void {
+    this.positionSubscription = this.getCurrentPosition().pipe(
+      filter(position => position !== null)
+    ).subscribe(currPos => {
+      if (this.isTracking && currPos) {
+        this.processPositionUpdate(currPos);
+      }
+    });
+  }
+
+  private processPositionUpdate(currPos: Position): void {
+    const currentTime = Date.now();
+
+    // Get the already-filtered speed from GPS service (in km/h)
+    const speedKmh = this.currentSpeed;
+
+    // Update speed directly from GPS service (already filtered and smoothed)
+    this._odometerService.updateSpeed(speedKmh);
+
+    // Calculate distance if we have a previous position
+    if (this.lastPosition && this.lastUpdateTime) {
+      const timeDiff = (currentTime - this.lastUpdateTime) / 1000; // seconds
+
+      if (timeDiff > 0 && timeDiff <= 10) {
+        // Calculate distance using Geolib
+        const distance = geolib.getDistance(
+          { latitude: this.lastPosition.latitude, longitude: this.lastPosition.longitude },
+          { latitude: currPos.latitude, longitude: currPos.longitude },
+          1 // 1 meter accuracy
+        );
+
+        // Update distance tracking
+        this.updateDistance(distance);
+
+        // Update time tracking
+        this.updateTimeTracking(timeDiff, speedKmh);
+
+        // Update average speed
+        this._odometerService.updateAverageSpeed();
+      }
+    }
+
+    this.lastPosition = currPos;
+    this.lastUpdateTime = currentTime;
+  }
+
+  private updateTimeTracking(timeDiff: number, speed: number): void {
+    this.totalTime += timeDiff;
+
+    if (speed >= this.MIN_SPEED_THRESHOLD) {
+      this.movingTime += timeDiff;
+    }
+  }
+
+  private updateDistance(distance: number): void {
+    // Only count distance if moving above threshold
+    if (this.currentSpeed >= this.MIN_SPEED_THRESHOLD) {
+      this.tripDistance += distance;
+      this.totalDistance += distance;
+
+      this.tripDistance$.next(this.tripDistance);
+      this.totalDistance$.next(this.totalDistance);
+
+      console.log(`📏 Distance: ${(this.tripDistance / 1000).toFixed(2)} km, Speed: ${this.currentSpeed.toFixed(1)} km/h`);
+    }
+  }
+
   startRouteRecording(): void {
     this.isRecordingRoute = true;
     this.routeStartTime = Date.now();
     this.routeDistance = 0;
     this.routeMaxSpeed = 0;
-    console.log('📍 Route recording started');
+    this.routeMovingTime = 0;
+    this.lastMovingTimestamp = 0;
+    this.stationaryCount = 0;
+    this.isCurrentlyMoving = false;
+    console.log('📍 Route recording started - waiting for movement...');
   }
 
   stopRouteRecording(): void {
@@ -131,6 +221,10 @@ export class GpsService {
     this.routeCoordinates$.next([]);
     this.routeDistance = 0;
     this.routeMaxSpeed = 0;
+    this.routeMovingTime = 0;
+    this.lastMovingTimestamp = 0;
+    this.stationaryCount = 0;
+    this.isCurrentlyMoving = false;
     console.log('📍 Route cleared');
   }
 
@@ -138,12 +232,55 @@ export class GpsService {
     return this.isRecordingRoute;
   }
 
-  getRouteStats() {
+  getRouteStatsToTraceRouteOnMap() {
     return {
       distance: this.routeDistance,
       maxSpeed: this.routeMaxSpeed,
-      duration: this.routeStartTime ? (Date.now() - this.routeStartTime) / 1000 : 0
+      duration: this.routeMovingTime
     };
+  }
+
+  private updateMovingTime(isMoving: boolean, timestamp: number): void {
+    if (isMoving) {
+      // User is moving
+      if (!this.isCurrentlyMoving) {
+        // Just started moving (or resumed after stop)
+        this.isCurrentlyMoving = true;
+        this.lastMovingTimestamp = timestamp;
+        this.stationaryCount = 0;
+        console.log('⏱️ Timer started/resumed');
+      } else {
+        // Continue moving - accumulate time
+        if (this.lastMovingTimestamp > 0) {
+          const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
+          if (timeDiff > 0 && timeDiff < 5) { // Sanity check
+            this.routeMovingTime += timeDiff;
+          }
+        }
+        this.lastMovingTimestamp = timestamp;
+      }
+    } else {
+      // User is stationary
+      this.stationaryCount++;
+
+      if (this.isCurrentlyMoving) {
+        // Still count as moving for first few stationary readings
+        if (this.stationaryCount >= this.STATIONARY_THRESHOLD) {
+          // Been stationary for 3+ readings - pause timer
+          this.isCurrentlyMoving = false;
+          console.log('⏸️ Timer paused - stationary for 3 seconds');
+        } else {
+          // Grace period - still accumulate time
+          if (this.lastMovingTimestamp > 0) {
+            const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
+            if (timeDiff > 0 && timeDiff < 5) {
+              this.routeMovingTime += timeDiff;
+            }
+          }
+          this.lastMovingTimestamp = timestamp;
+        }
+      }
+    }
   }
 
   async startTracking(): Promise<void> {
@@ -242,7 +379,7 @@ export class GpsService {
     const filtered = this.applyKalmanFilter(rawLat, rawLon, accuracy);
 
     // Filter 3: Calculate speed with spike protection (returns km/h)
-    const calculatedSpeedKmh = this.calculateSpeed(
+    const calculatedSpeedKmh = this._odometerService.calculateSpeed(
       filtered.lat,
       filtered.lon,
       timestamp
@@ -254,7 +391,7 @@ export class GpsService {
     const speedToUse = isMoving ? calculatedSpeedKmh : 0;
 
     // Filter 5: Smooth speed with moving average
-    const smoothedSpeed = this.smoothSpeed(speedToUse);
+    const smoothedSpeed = this._odometerService.smoothSpeed(speedToUse);
     this.currentSpeed = smoothedSpeed;
 
     // Create position object
@@ -269,9 +406,14 @@ export class GpsService {
 
     this.currentPosition$.next(pos);
 
+    // Track moving time for route recording
+    if (this.isRecordingRoute) {
+      this.updateMovingTime(isMoving, timestamp);
+    }
+
     // Add to route if recording and actually moving
-    if (isMoving) {
-      this.addPointToRoute(pos.latitude, pos.longitude);
+    if (isMoving && this.isRecordingRoute) {
+      this.addPointToRoute(pos.latitude, pos.longitude, calculatedSpeedKmh); // Pass actual speed
     }
 
     // Update last position for next calculation
@@ -309,61 +451,6 @@ export class GpsService {
     };
   }
 
-  private calculateSpeed(lat: number, lon: number, timestamp: number): number {
-    if (!this.lastPosition || !this.lastPositionTime) {
-      return 0;
-    }
-
-    const timeDiff = (timestamp - this.lastPositionTime) / 1000; // seconds
-
-    if (timeDiff <= 0 || timeDiff > 5) {
-      return 0;
-    }
-
-    const distance = this.calculateDistance(
-      this.lastPosition.latitude,
-      this.lastPosition.longitude,
-      lat,
-      lon
-    );
-
-    const speedMs = distance / timeDiff; // meters per second
-    const speedKmh = speedMs * 3.6; // km/h
-
-    // Filter: Check for unrealistic speeds
-    if (speedKmh > this.MAX_REALISTIC_SPEED_KMH) {
-      console.log(`⚠️ Speed spike detected and rejected: ${speedKmh.toFixed(1)} km/h`);
-      return 0;
-    }
-
-    // Filter: Check for unrealistic acceleration
-    if (this.currentSpeed > 0) {
-      const lastSpeedMs = this.currentSpeed / 3.6; // Convert km/h to m/s
-      const acceleration = Math.abs(speedMs - lastSpeedMs) / timeDiff;
-
-      if (acceleration > this.MAX_ACCELERATION_MS2) {
-        console.log(`⚠️ Acceleration spike detected and rejected: ${acceleration.toFixed(1)} m/s²`);
-        return 0;
-      }
-    }
-
-    return speedKmh;
-  }
-
-  private smoothSpeed(speedKmh: number): number {
-    // Add to history
-    this.speedHistory.push(speedKmh);
-
-    // Keep only recent history
-    if (this.speedHistory.length > this.SPEED_HISTORY_LENGTH) {
-      this.speedHistory.shift();
-    }
-
-    // Calculate moving average
-    const sum = this.speedHistory.reduce((a, b) => a + b, 0);
-    return sum / this.speedHistory.length;
-  }
-
   private updateGPSQuality(accuracy: number): void {
     let quality: 'excellent' | 'good' | 'fair' | 'poor';
 
@@ -391,72 +478,43 @@ export class GpsService {
     this.isFirstReading = true;
   }
 
-  private addPointToRoute(latitude: number, longitude: number): void {
+  private addPointToRoute(latitude: number, longitude: number, actualSpeedKmh: number): void {
     if (!this.isRecordingRoute) return;
 
     if (this.routeCoordinates.length > 0) {
       const lastPoint = this.routeCoordinates[this.routeCoordinates.length - 1];
-      const distance = this.calculateDistance(
+      const distance = this._odometerService.calculateDistance(
         lastPoint[0], lastPoint[1],
         latitude, longitude
       );
 
       if (distance < this.MIN_DISTANCE_BETWEEN_POINTS) {
+        // Still update max speed even if not adding point
+        if (actualSpeedKmh > this.routeMaxSpeed && actualSpeedKmh <= this.MAX_REALISTIC_SPEED_KMH) {
+          this.routeMaxSpeed = actualSpeedKmh;
+          console.log(`🏆 New max speed: ${actualSpeedKmh.toFixed(1)} km/h`);
+        }
         return;
       }
 
       this.routeDistance += distance;
 
-      // Update max speed (only if it's realistic)
-      if (this.currentSpeed > this.routeMaxSpeed && this.currentSpeed <= this.MAX_REALISTIC_SPEED_KMH) {
-        this.routeMaxSpeed = this.currentSpeed;
-        console.log(`🏆 New max speed: ${this.currentSpeed.toFixed(1)} km/h`);
+      // Update max speed using actual calculated speed (not smoothed)
+      if (actualSpeedKmh > this.routeMaxSpeed && actualSpeedKmh <= this.MAX_REALISTIC_SPEED_KMH) {
+        this.routeMaxSpeed = actualSpeedKmh;
+        console.log(`🏆 New max speed: ${actualSpeedKmh.toFixed(1)} km/h`);
       }
     }
 
     this.routeCoordinates.push([latitude, longitude]);
     this.routeCoordinates$.next([...this.routeCoordinates]);
-    console.log(`📍 Route point added. Total points: ${this.routeCoordinates.length}, Distance: ${(this.routeDistance / 1000).toFixed(2)} km`);
+
+    const movingMin = Math.floor(this.routeMovingTime / 60);
+    const movingSec = Math.floor(this.routeMovingTime % 60);
+    console.log(`📍 Point added. Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Moving time: ${movingMin}m ${movingSec}s`);
   }
 
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371e3;
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) *
-      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
-  }
-
-  getMinSpeedThreshold(): number {
-    return this.MIN_SPEED_THRESHOLD;
-  }
-
-  getMaxRealisticSpeed(): number {
-    return this.MAX_REALISTIC_SPEED_KMH;
-  }
-
-  setMaxRealisticSpeed(speedKmh: number): void {
-    this.MAX_REALISTIC_SPEED_KMH = speedKmh;
-    console.log(`🎯 Max realistic speed set to ${speedKmh} km/h`);
-  }
-
-  setMinSpeedThreshold(speedKmh: number): void {
-    this.MIN_SPEED_THRESHOLD = speedKmh;
-    console.log(`🎯 Min speed threshold set to ${speedKmh} km/h`);
-  }
-
-  disableGPSSpeedMonitoring(): void {
-    this.isGPSEnabled = false;
-    this.resetFilters();
-    console.log('GPS speed monitoring disabled');
-  }
 
   async saveCurrentRoute(name?: string, description?: string): Promise<string> {
     if (this.routeCoordinates.length === 0) {
