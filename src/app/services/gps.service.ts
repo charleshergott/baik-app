@@ -34,6 +34,12 @@ export class GpsService {
   private kalmanVariance = 1000; // Initial high uncertainty
   private PROCESS_NOISE = 0.5;
 
+  // GPS warm-up parameters
+  private gpsWarmupStartTime: number = 0;
+  private readonly GPS_WARMUP_DURATION = 5000; // 5 seconds warmup period
+  private readonly MIN_READINGS_FOR_MOVEMENT = 3; // Need 3 consistent readings to confirm movement
+  private movementReadingsCount = 0;
+
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
   private isRecordingRoute = false;
@@ -174,6 +180,10 @@ export class GpsService {
   private async startGPS(): Promise<void> {
     console.log('📡 Starting GPS with enhanced filtering');
 
+    // Mark GPS warmup start
+    this.gpsWarmupStartTime = Date.now();
+    console.log('🔄 GPS warming up... readings will stabilize in 5 seconds');
+
     const options: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 10000,
@@ -198,6 +208,13 @@ export class GpsService {
     // Update GPS quality indicator
     this.updateGPSQuality(accuracy);
 
+    // Filter 0: GPS Warmup - ignore readings during warmup period
+    const warmupElapsed = Date.now() - this.gpsWarmupStartTime;
+    if (warmupElapsed < this.GPS_WARMUP_DURATION) {
+      console.log(`🔄 GPS warming up... ${((this.GPS_WARMUP_DURATION - warmupElapsed) / 1000).toFixed(1)}s remaining`);
+      return;
+    }
+
     // Filter 1: Reject readings with poor accuracy
     if (accuracy > this.MAX_ACCURACY_THRESHOLD) {
       console.log(`⚠️ GPS reading rejected - poor accuracy: ${accuracy.toFixed(1)}m`);
@@ -221,12 +238,24 @@ export class GpsService {
     // Filter 3: Check if actually moving (considering accuracy)
     const isMoving = this.detectMovement(calculatedSpeed, accuracy);
 
-    if (!isMoving) {
+    // Filter 4: Require consecutive movement readings to confirm actual movement
+    if (isMoving) {
+      this.movementReadingsCount++;
+    } else {
+      this.movementReadingsCount = 0;
       calculatedSpeed.speedKmh = 0;
       calculatedSpeed.speedKnots = 0;
     }
 
-    // Filter 4: Smooth speed with moving average
+    // Only consider as truly moving if we have enough consecutive readings
+    const confirmedMovement = this.movementReadingsCount >= this.MIN_READINGS_FOR_MOVEMENT;
+
+    if (!confirmedMovement) {
+      calculatedSpeed.speedKmh = 0;
+      calculatedSpeed.speedKnots = 0;
+    }
+
+    // Filter 5: Smooth speed with moving average
     const smoothedSpeed = this.smoothSpeed(calculatedSpeed.speedKnots);
     this.currentSpeed = smoothedSpeed;
 
@@ -242,8 +271,8 @@ export class GpsService {
 
     this.currentPosition$.next(pos);
 
-    // Add to route if recording and actually moving
-    if (isMoving) {
+    // Add to route if recording and actually moving with confirmation
+    if (confirmedMovement) {
       this.addPointToRoute(pos.latitude, pos.longitude);
     }
 
@@ -252,8 +281,9 @@ export class GpsService {
     this.lastPositionTime = timestamp;
 
     console.log(`📍 GPS: Lat ${filtered.lat.toFixed(6)}, Lon ${filtered.lon.toFixed(6)}, ` +
-      `Speed: ${smoothedSpeed.toFixed(1)}kn, Acc: ${accuracy.toFixed(1)}m, ` +
-      `Moving: ${isMoving ? 'YES' : 'NO'}`);
+      `Speed: ${smoothedSpeed.toFixed(1)}kn (${(smoothedSpeed * 1.852).toFixed(1)}km/h), ` +
+      `Acc: ${accuracy.toFixed(1)}m, Moving: ${confirmedMovement ? 'YES' : 'NO'} ` +
+      `(${this.movementReadingsCount}/${this.MIN_READINGS_FOR_MOVEMENT})`);
   }
 
   private applyKalmanFilter(lat: number, lon: number, accuracy: number): { lat: number, lon: number } {
