@@ -12,7 +12,7 @@ export class OdometerService implements OnDestroy {
   private currentSpeed = 0;
 
   // Thresholds
-  MIN_SPEED_THRESHOLD = 5; // km/h - match GPS service
+  MIN_SPEED_THRESHOLD = 2; // km/h - match GPS service
 
   // Trip statistics
   private tripDistance$ = new BehaviorSubject<number>(0);
@@ -24,7 +24,7 @@ export class OdometerService implements OnDestroy {
   private totalDistance = 0;
   private maxSpeed = 0;
   private lastPositionTime = 0;
-  private SPEED_HISTORY_LENGTH = 5;
+  private SPEED_HISTORY_LENGTH = 2;
   private movingTime = 0;
   private totalTime = 0;
   private tripStartTime: number | null = null;

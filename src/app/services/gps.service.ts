@@ -31,6 +31,8 @@ export class GpsService {
   private kalmanLon: number | null = null;
   private kalmanVariance = 1000;
   private PROCESS_NOISE = 0.5;
+  private stationaryCount = 0;
+  private readonly STATIONARY_THRESHOLD = 3;
 
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
@@ -40,8 +42,6 @@ export class GpsService {
   private routeMaxSpeed: number = 0;
   private routeMovingTime: number = 0;
   private lastMovingTimestamp: number = 0;
-  private stationaryCount: number = 0;
-  private readonly STATIONARY_THRESHOLD = 3;
   private isCurrentlyMoving: boolean = false;
   private readonly MIN_DISTANCE_BETWEEN_POINTS = 5;
   private lastUpdateTime: number | null = null;
@@ -149,8 +149,8 @@ export class GpsService {
 
     const options: PositionOptions = {
       enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 1000
+      timeout: 5000,        // Reduced from 10000
+      maximumAge: 0         // Changed from 1000 - always get fresh reading
     };
 
     this.watchId = navigator.geolocation.watchPosition(
@@ -163,6 +163,8 @@ export class GpsService {
       options
     );
   }
+
+
 
   private processGPSPosition(position: GeolocationPosition): void {
     const accuracy = position.coords.accuracy;
@@ -212,10 +214,23 @@ export class GpsService {
       timestamp
     );
 
+    // Show raw speed immediately for responsive UI
+    this._odometerService.updateSpeed(calculatedSpeedKmh);
     const minThreshold = this._odometerService.getMinSpeedThreshold();
-    const isMoving = calculatedSpeedKmh > minThreshold;
+
+    if (calculatedSpeedKmh < minThreshold || accuracy > 15) {
+      this.stationaryCount++;
+    } else {
+      this.stationaryCount = 0;
+    }
+
+    // Only count as moving if we've had movement for 3+ consecutive readings
+    const isMoving = calculatedSpeedKmh > minThreshold &&
+      accuracy <= 15 &&
+      this.stationaryCount === 0;
     const speedToUse = isMoving ? calculatedSpeedKmh : 0;
 
+    // Then smooth for calculations
     const smoothedSpeed = this._odometerService.smoothSpeed(speedToUse);
     this._odometerService.updateSpeed(smoothedSpeed);
 
@@ -240,6 +255,8 @@ export class GpsService {
           1
         );
 
+        this._odometerService.updateTripDistance(distance);
+        this._odometerService.updateTotalDistance(distance);
         this._odometerService.updateTimeTracking(timeDiff);
       }
     }
