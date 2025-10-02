@@ -185,6 +185,11 @@ export class GpsService {
         accuracy: accuracy
       };
       this.lastPositionTime = position.timestamp;
+      this.lastUpdateTime = Date.now();
+
+      // IMPORTANT: Initialize odometer's baseline too
+      this._odometerService.calculateSpeed(rawLat, rawLon, position.timestamp);
+
       this.isFirstReading = false;
       console.log('GPS ready - speed tracking active');
       return;
