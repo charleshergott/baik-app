@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { MockGPSConfig, MockScenario, Position } from '../interfaces/master';
 
-
 @Injectable({
   providedIn: 'root'
 })
@@ -255,7 +254,23 @@ export class MockGpsService {
     this.currentLat = lat;
     this.currentLon = lon;
     this.currentSpeed = 0;
-    console.log(`🚀 Teleported to: ${lat}, ${lon}`);
+    this.currentHeading = 0;
+
+    // Immediately emit new position
+    const position: Position = {
+      latitude: lat,
+      longitude: lon,
+      heading: 0,
+      speed: 0,
+      timestamp: Date.now(),
+      accuracy: this.currentAccuracy
+    };
+
+    this.currentPosition$.next(position);
+    console.log(`🚀 Teleported to: ${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+
+    // Reset start time so scenarios start fresh from new location
+    this.startTime = Date.now();
   }
 
   /**

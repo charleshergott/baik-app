@@ -61,11 +61,20 @@ app-chronometer {
     bottom: 0;
 }
 
+// app-mock-gps-control {
+//     position: fixed;
+//     z-index: 2;
+//     width: 100%;
+//     bottom: 30px;
+// }
+
 
 .map-wrapper {
     position: relative;
     width: 100%;
-    height: 400px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .map-container {
@@ -517,11 +526,9 @@ app-chronometer {
     border-radius: 12px;
 }
 
-/* Mobile Responsive */
+
 @media (max-width: 768px) {
-    .map-wrapper {
-        height: 100vh;
-    }
+
 
     .waypoint-info-window {
         position: fixed !important;

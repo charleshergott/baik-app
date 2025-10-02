@@ -1,0 +1,179 @@
+.mock-control-panel {
+    background: #f5f5f5;
+    border-radius: 8px;
+    margin: 0 auto;
+    display: flex;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+h3 {
+    color: #555;
+    margin: 15px 0 10px;
+    font-size: 1.1em;
+}
+
+.status-section,
+.scenario-section,
+.custom-section,
+.location-section,
+.signal-section,
+.control-section,
+.debug-section {
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.status-item {
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    background: #f9f9f9;
+    border-radius: 4px;
+}
+
+.status-item .label {
+    font-size: 0.85em;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.status-item .value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #333;
+}
+
+.status-item .value.active {
+    color: #4CAF50;
+}
+
+.quality-excellent {
+    color: #4CAF50;
+}
+
+.quality-good {
+    color: #8BC34A;
+}
+
+.quality-fair {
+    color: #FF9800;
+}
+
+.quality-poor {
+    color: #f44336;
+}
+
+.scenario-buttons,
+.location-buttons,
+.signal-buttons,
+.control-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+button {
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 0.9em;
+}
+
+button:hover:not(:disabled) {
+    background: #f0f0f0;
+    border-color: #2196F3;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+button.active {
+    background: #2196F3;
+    color: white;
+    border-color: #2196F3;
+}
+
+.control-btn {
+    flex: 1;
+    min-width: 100px;
+    font-weight: bold;
+}
+
+.control-btn.stop {
+    background: #f44336;
+    color: white;
+    border-color: #f44336;
+}
+
+.control-btn.reset {
+    background: #FF9800;
+    color: white;
+    border-color: #FF9800;
+}
+
+.signal-btn.good {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+.signal-btn.poor {
+    background: #FF9800;
+    color: white;
+    border-color: #FF9800;
+}
+
+.custom-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.control-group label {
+    min-width: 150px;
+    font-weight: 500;
+}
+
+.control-group input[type="range"] {
+    flex: 1;
+}
+
+.control-group .value {
+    min-width: 80px;
+    text-align: right;
+    font-weight: bold;
+    color: #2196F3;
+}
+
+.debug-section pre {
+    background: #f5f5f5;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.85em;
+}

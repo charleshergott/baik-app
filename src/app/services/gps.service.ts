@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, filter, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import { Position, SavedRoute, Waypoint } from '../interfaces/master';
-import { environment } from '../environments/environment.prod';
 import { OdometerService } from './odometer.service';
 import * as geolib from 'geolib';
 
 @Injectable({
   providedIn: 'root'
 })
+
 export class GpsService {
 
   private currentPosition$ = new BehaviorSubject<Position | null>(null);
@@ -20,19 +20,16 @@ export class GpsService {
   private lastPosition: Position | null = null;
   private lastPositionTime = 0;
 
-  // REMOVED: Duplicate distance/speed tracking properties
-  // Now delegated to OdometerService
-
   // Enhanced filtering parameters
-  private MAX_ACCURACY_THRESHOLD = 20; // meters - ignore readings worse than this
+  private MAX_ACCURACY_THRESHOLD = 20;
 
   // GPS initialization
-  private isFirstReading = true; // Flag to ignore very first GPS lock
+  private isFirstReading = true;
 
-  // Kalman filter variables for position smoothing
+  // Kalman filter variables
   private kalmanLat: number | null = null;
   private kalmanLon: number | null = null;
-  private kalmanVariance = 1000; // Initial high uncertainty
+  private kalmanVariance = 1000;
   private PROCESS_NOISE = 0.5;
 
   // Route tracking properties
@@ -46,7 +43,8 @@ export class GpsService {
   private stationaryCount: number = 0;
   private readonly STATIONARY_THRESHOLD = 3;
   private isCurrentlyMoving: boolean = false;
-  private readonly MIN_DISTANCE_BETWEEN_POINTS = 5; // meters
+  private readonly MIN_DISTANCE_BETWEEN_POINTS = 5;
+  private lastUpdateTime: number | null = null;
 
   // IndexedDB
   private db: IDBDatabase | null = null;
@@ -54,8 +52,6 @@ export class GpsService {
   private readonly DB_NAME = 'BikeRoutesDB';
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'routes';
-  private isDevelopmentMode = environment.enableMockGPS;
-  private positionSubscription?: Subscription;
 
   // GPS Quality tracking
   currentAccuracy: number = 0;
@@ -64,21 +60,20 @@ export class GpsService {
   constructor(
     private _odometerService: OdometerService
   ) {
-    console.log(`🔧 GPS Service: ${this.isDevelopmentMode ? 'MOCK MODE' : 'REAL MODE'}`);
+    console.log('GPS Service initialized (Real GPS Mode)');
     this.dbInitialized = this.initIndexedDB();
-    this.initializeTracking();
   }
 
   private async initIndexedDB(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
       request.onerror = () => {
-        console.error('❌ IndexedDB failed to open');
+        console.error('IndexedDB failed to open');
         reject(request.error);
       };
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('✅ IndexedDB initialized');
+        console.log('IndexedDB initialized');
         resolve();
       };
       request.onupgradeneeded = (event: any) => {
@@ -89,7 +84,6 @@ export class GpsService {
           });
           objectStore.createIndex('createdAt', 'createdAt', { unique: false });
           objectStore.createIndex('lastUsed', 'lastUsed', { unique: false });
-          console.log('📦 IndexedDB object store created');
         }
       };
     });
@@ -115,166 +109,23 @@ export class GpsService {
     return this.gpsQuality$.asObservable();
   }
 
-  /**
-   * Initialize tracking - delegates to OdometerService for speed/distance
-   */
-  private initializeTracking(): void {
-    this.positionSubscription = this.getCurrentPosition().pipe(
-      filter(position => position !== null)
-    ).subscribe(currPos => {
-      if (this.isTracking && currPos) {
-        this.processPositionUpdate(currPos);
-      }
-    });
-  }
-
-  private processPositionUpdate(currPos: Position): void {
-    const currentTime = Date.now();
-
-    // Get current speed from OdometerService
-    const speedKmh = this._odometerService.getCurrentSpeedValue();
-
-    // Calculate distance if we have a previous position
-    if (this.lastPosition && this.lastPositionTime) {
-      const timeDiff = (currentTime - this.lastPositionTime) / 1000; // seconds
-
-      if (timeDiff > 0 && timeDiff <= 10) {
-        // Calculate distance using Geolib
-        const distance = geolib.getDistance(
-          { latitude: this.lastPosition.latitude, longitude: this.lastPosition.longitude },
-          { latitude: currPos.latitude, longitude: currPos.longitude },
-          1 // 1 meter accuracy
-        );
-
-        // Update distance tracking in OdometerService
-        this.updateOdometerDistance(distance, timeDiff, speedKmh);
-      }
-    }
-
-    this.lastPosition = currPos;
-    this.lastPositionTime = currentTime;
-  }
-
-  /**
-   * Updates distance and time tracking in OdometerService
-   */
-  private updateOdometerDistance(distance: number, timeDiff: number, speed: number): void {
-    const minThreshold = this._odometerService.getMinSpeedThreshold();
-
-    // Only count distance if moving above threshold
-    if (speed >= minThreshold) {
-      // Update distance through OdometerService
-      // Note: You'll need to add these methods to OdometerService
-      this.updateDistance(distance);
-
-      console.log(`📏 Distance: ${(this._odometerService.getTripDistanceValue() / 1000).toFixed(2)} km, Speed: ${speed.toFixed(1)} km/h`);
-    }
-  }
-
-  /**
-   * Helper to update distance - delegates to OdometerService
-   * Note: Add updateTripDistance() and updateTotalDistance() methods to OdometerService
-   */
-  private updateDistance(distance: number): void {
-    // This should call methods on OdometerService to update distances
-    // You'll need to add these methods to OdometerService:
-    // - updateTripDistance(meters: number)
-    // - updateTotalDistance(meters: number)
-  }
-
-  startRouteRecording(): void {
-    this.isRecordingRoute = true;
-    this.routeStartTime = Date.now();
-    this.routeDistance = 0;
-    this.routeMaxSpeed = 0;
-    this.routeMovingTime = 0;
-    this.lastMovingTimestamp = 0;
-    this.stationaryCount = 0;
-    this.isCurrentlyMoving = false;
-    console.log('📍 Route recording started - waiting for movement...');
-  }
-
-  stopRouteRecording(): void {
-    this.isRecordingRoute = false;
-    console.log('📍 Route recording stopped');
-  }
-
-  clearRoute(): void {
-    this.routeCoordinates = [];
-    this.routeCoordinates$.next([]);
-    this.routeDistance = 0;
-    this.routeMaxSpeed = 0;
-    this.routeMovingTime = 0;
-    this.lastMovingTimestamp = 0;
-    this.stationaryCount = 0;
-    this.isCurrentlyMoving = false;
-    console.log('📍 Route cleared');
-  }
-
-  isRecording(): boolean {
-    return this.isRecordingRoute;
-  }
-
-  getRouteStatsToTraceRouteOnMap() {
-    return {
-      distance: this.routeDistance,
-      maxSpeed: this.routeMaxSpeed,
-      duration: this.routeMovingTime
-    };
-  }
-
-  private updateMovingTime(isMoving: boolean, timestamp: number): void {
-    if (isMoving) {
-      if (!this.isCurrentlyMoving) {
-        this.isCurrentlyMoving = true;
-        this.lastMovingTimestamp = timestamp;
-        this.stationaryCount = 0;
-        console.log('⏱️ Timer started/resumed');
-      } else {
-        if (this.lastMovingTimestamp > 0) {
-          const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
-          if (timeDiff > 0 && timeDiff < 5) {
-            this.routeMovingTime += timeDiff;
-          }
-        }
-        this.lastMovingTimestamp = timestamp;
-      }
-    } else {
-      this.stationaryCount++;
-
-      if (this.isCurrentlyMoving) {
-        if (this.stationaryCount >= this.STATIONARY_THRESHOLD) {
-          this.isCurrentlyMoving = false;
-          console.log('⏸️ Timer paused - stationary for 3 seconds');
-        } else {
-          if (this.lastMovingTimestamp > 0) {
-            const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
-            if (timeDiff > 0 && timeDiff < 5) {
-              this.routeMovingTime += timeDiff;
-            }
-          }
-          this.lastMovingTimestamp = timestamp;
-        }
-      }
-    }
-  }
-
   async startTracking(): Promise<void> {
-    if (this.isTracking) return;
+    if (this.isTracking) {
+      console.log('Already tracking');
+      return;
+    }
 
     try {
       if (!('geolocation' in navigator)) {
         throw new Error('Geolocation is not supported by this browser');
       }
 
-      // Start OdometerService tracking
       this._odometerService.startTracking();
-
       await this.startGPS();
       this.isTracking = true;
-      console.log('✅ GPS tracking started');
+      console.log('GPS tracking started');
     } catch (error) {
-      console.error('❌ Failed to start GPS tracking:', error);
+      console.error('Failed to start GPS tracking:', error);
       throw error;
     }
   }
@@ -287,16 +138,14 @@ export class GpsService {
       this.watchId = null;
     }
 
-    // Stop OdometerService tracking
     this._odometerService.stopTracking();
-
     this.isTracking = false;
     this.resetFilters();
-    console.log('🛑 GPS tracking stopped');
+    console.log('GPS tracking stopped');
   }
 
   private async startGPS(): Promise<void> {
-    console.log('📡 Starting GPS - waiting for first lock...');
+    console.log('Starting GPS - waiting for first lock...');
 
     const options: PositionOptions = {
       enableHighAccuracy: true,
@@ -318,12 +167,10 @@ export class GpsService {
   private processGPSPosition(position: GeolocationPosition): void {
     const accuracy = position.coords.accuracy;
     this.currentAccuracy = accuracy;
-
     this.updateGPSQuality(accuracy);
 
-    // Very first reading - establish baseline
     if (this.isFirstReading) {
-      console.log('🎯 First GPS lock acquired - establishing baseline position');
+      console.log('First GPS lock acquired');
       const rawLat = position.coords.latitude;
       const rawLon = position.coords.longitude;
 
@@ -338,15 +185,13 @@ export class GpsService {
         accuracy: accuracy
       };
       this.lastPositionTime = position.timestamp;
-
       this.isFirstReading = false;
-      console.log('✅ GPS ready - speed tracking active');
+      console.log('GPS ready - speed tracking active');
       return;
     }
 
-    // Filter 1: Reject poor accuracy
     if (accuracy > this.MAX_ACCURACY_THRESHOLD) {
-      console.log(`⚠️ GPS reading rejected - poor accuracy: ${accuracy.toFixed(1)}m`);
+      console.log(`GPS reading rejected - poor accuracy: ${accuracy.toFixed(1)}m`);
       return;
     }
 
@@ -354,54 +199,57 @@ export class GpsService {
     const rawLon = position.coords.longitude;
     const timestamp = position.timestamp;
 
-    // Filter 2: Apply Kalman filter
     const filtered = this.applyKalmanFilter(rawLat, rawLon, accuracy);
 
-    // Filter 3: Calculate speed (delegates to OdometerService)
     const calculatedSpeedKmh = this._odometerService.calculateSpeed(
       filtered.lat,
       filtered.lon,
       timestamp
     );
 
-    // Filter 4: Movement detection
     const minThreshold = this._odometerService.getMinSpeedThreshold();
     const isMoving = calculatedSpeedKmh > minThreshold;
     const speedToUse = isMoving ? calculatedSpeedKmh : 0;
 
-    // Filter 5: Smooth speed (delegates to OdometerService)
     const smoothedSpeed = this._odometerService.smoothSpeed(speedToUse);
-
-    // Update OdometerService with final speed
     this._odometerService.updateSpeed(smoothedSpeed);
 
-    // Create position object
     const pos: Position = {
       latitude: filtered.lat,
       longitude: filtered.lon,
       heading: position.coords.heading || undefined,
-      speed: smoothedSpeed / 3.6, // Convert km/h to m/s
+      speed: smoothedSpeed / 3.6,
       timestamp: timestamp,
       accuracy: accuracy
     };
 
     this.currentPosition$.next(pos);
 
-    // Track moving time for route recording
+    // Update distance tracking
+    if (this.lastPosition && this.lastUpdateTime) {
+      const timeDiff = (Date.now() - this.lastUpdateTime) / 1000;
+      if (timeDiff > 0 && timeDiff <= 10) {
+        const distance = geolib.getDistance(
+          { latitude: this.lastPosition.latitude, longitude: this.lastPosition.longitude },
+          { latitude: pos.latitude, longitude: pos.longitude },
+          1
+        );
+
+        this._odometerService.updateTimeTracking(timeDiff);
+      }
+    }
+
     if (this.isRecordingRoute) {
       this.updateMovingTime(isMoving, timestamp);
     }
 
-    // Add to route if recording and moving
     if (isMoving && this.isRecordingRoute) {
       this.addPointToRoute(pos.latitude, pos.longitude, calculatedSpeedKmh);
     }
 
-    // Update last position
     this.lastPosition = pos;
     this.lastPositionTime = timestamp;
-
-    console.log(`📍 GPS: ${smoothedSpeed.toFixed(1)}km/h, Acc: ${accuracy.toFixed(1)}m, Moving: ${isMoving ? 'YES' : 'NO'}`);
+    this.lastUpdateTime = Date.now();
   }
 
   private applyKalmanFilter(lat: number, lon: number, accuracy: number): { lat: number, lon: number } {
@@ -420,10 +268,7 @@ export class GpsService {
     this.kalmanLon = this.kalmanLon + kalmanGain * (lon - this.kalmanLon);
     this.kalmanVariance = (1 - kalmanGain) * predictedVariance;
 
-    return {
-      lat: this.kalmanLat,
-      lon: this.kalmanLon
-    };
+    return { lat: this.kalmanLat, lon: this.kalmanLon };
   }
 
   private updateGPSQuality(accuracy: number): void {
@@ -448,7 +293,82 @@ export class GpsService {
     this.kalmanVariance = 1000;
     this.lastPosition = null;
     this.lastPositionTime = 0;
+    this.lastUpdateTime = null;
     this.isFirstReading = true;
+  }
+
+  startRouteRecording(): void {
+    this.isRecordingRoute = true;
+    this.routeStartTime = Date.now();
+    this.routeDistance = 0;
+    this.routeMaxSpeed = 0;
+    this.routeMovingTime = 0;
+    this.lastMovingTimestamp = 0;
+    this.stationaryCount = 0;
+    this.isCurrentlyMoving = false;
+    console.log('Route recording started');
+  }
+
+  stopRouteRecording(): void {
+    this.isRecordingRoute = false;
+    console.log('Route recording stopped');
+  }
+
+  clearRoute(): void {
+    this.routeCoordinates = [];
+    this.routeCoordinates$.next([]);
+    this.routeDistance = 0;
+    this.routeMaxSpeed = 0;
+    this.routeMovingTime = 0;
+    this.lastMovingTimestamp = 0;
+    this.stationaryCount = 0;
+    this.isCurrentlyMoving = false;
+    console.log('Route cleared');
+  }
+
+  isRecording(): boolean {
+    return this.isRecordingRoute;
+  }
+
+  getRouteStatsToTraceRouteOnMap() {
+    return {
+      distance: this.routeDistance,
+      maxSpeed: this.routeMaxSpeed,
+      duration: this.routeMovingTime
+    };
+  }
+
+  private updateMovingTime(isMoving: boolean, timestamp: number): void {
+    if (isMoving) {
+      if (!this.isCurrentlyMoving) {
+        this.isCurrentlyMoving = true;
+        this.lastMovingTimestamp = timestamp;
+        this.stationaryCount = 0;
+      } else {
+        if (this.lastMovingTimestamp > 0) {
+          const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
+          if (timeDiff > 0 && timeDiff < 5) {
+            this.routeMovingTime += timeDiff;
+          }
+        }
+        this.lastMovingTimestamp = timestamp;
+      }
+    } else {
+      this.stationaryCount++;
+      if (this.isCurrentlyMoving) {
+        if (this.stationaryCount >= this.STATIONARY_THRESHOLD) {
+          this.isCurrentlyMoving = false;
+        } else {
+          if (this.lastMovingTimestamp > 0) {
+            const timeDiff = (timestamp - this.lastMovingTimestamp) / 1000;
+            if (timeDiff > 0 && timeDiff < 5) {
+              this.routeMovingTime += timeDiff;
+            }
+          }
+          this.lastMovingTimestamp = timestamp;
+        }
+      }
+    }
   }
 
   private addPointToRoute(latitude: number, longitude: number, actualSpeedKmh: number): void {
@@ -462,31 +382,23 @@ export class GpsService {
       );
 
       if (distance < this.MIN_DISTANCE_BETWEEN_POINTS) {
-        // Still update max speed
         const maxRealistic = this._odometerService.getMaxRealisticSpeed();
         if (actualSpeedKmh > this.routeMaxSpeed && actualSpeedKmh <= maxRealistic) {
           this.routeMaxSpeed = actualSpeedKmh;
-          console.log(`🏆 New max speed: ${actualSpeedKmh.toFixed(1)} km/h`);
         }
         return;
       }
 
       this.routeDistance += distance;
 
-      // Update max speed
       const maxRealistic = this._odometerService.getMaxRealisticSpeed();
       if (actualSpeedKmh > this.routeMaxSpeed && actualSpeedKmh <= maxRealistic) {
         this.routeMaxSpeed = actualSpeedKmh;
-        console.log(`🏆 New max speed: ${actualSpeedKmh.toFixed(1)} km/h`);
       }
     }
 
     this.routeCoordinates.push([latitude, longitude]);
     this.routeCoordinates$.next([...this.routeCoordinates]);
-
-    const movingMin = Math.floor(this.routeMovingTime / 60);
-    const movingSec = Math.floor(this.routeMovingTime % 60);
-    console.log(`📍 Point added. Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Moving time: ${movingMin}m ${movingSec}s`);
   }
 
   async saveCurrentRoute(name?: string, description?: string): Promise<string> {
@@ -523,7 +435,7 @@ export class GpsService {
       endTime: endTime,
       createdAt: new Date(this.routeStartTime).toISOString(),
       lastUsed: new Date(endTime).toISOString(),
-      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min, Max Speed: ${this.routeMaxSpeed.toFixed(1)}km/h, Avg Speed: ${averageSpeed.toFixed(1)}km/h`
+      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min`
     };
 
     await this.saveRoute(route);
@@ -541,11 +453,11 @@ export class GpsService {
       const objectStore = transaction.objectStore(this.STORE_NAME);
       const request = objectStore.put(route);
       request.onsuccess = () => {
-        console.log('💾 Route saved with ID:', route.id);
+        console.log('Route saved with ID:', route.id);
         resolve();
       };
       request.onerror = () => {
-        console.error('❌ Failed to save route:', request.error);
+        console.error('Failed to save route:', request.error);
         reject(request.error);
       };
     });
@@ -611,7 +523,7 @@ export class GpsService {
       const objectStore = transaction.objectStore(this.STORE_NAME);
       const request = objectStore.delete(id);
       request.onsuccess = () => {
-        console.log('🗑️ Route deleted:', id);
+        console.log('Route deleted:', id);
         resolve();
       };
       request.onerror = () => {
@@ -624,7 +536,7 @@ export class GpsService {
     this.routeCoordinates = route.waypoints.map(wp => [wp.latitude, wp.longitude] as [number, number]);
     this.routeCoordinates$.next(this.routeCoordinates);
     this.updateRouteLastUsed(route.id);
-    console.log('📍 Route loaded to map');
+    console.log('Route loaded to map');
   }
 
   private generateId(): string {

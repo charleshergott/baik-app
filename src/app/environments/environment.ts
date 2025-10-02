@@ -3,7 +3,7 @@ export const environment = {
     development: true,
     appUrl: '',
     vapidKey: '',
-    enableMockGPS: true,  // Enable mock GPS in development
+    enableMockGPS: true,
     showDevControls: true,
 
     firebase: {

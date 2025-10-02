@@ -6,10 +6,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { filter, Subscription, take } from 'rxjs';
 import { ChronometerComponent } from '../chronometer/chronometer.component';
-
 import * as L from 'leaflet';
 import { ChronometerService } from '../../services/chronometer.service';
 import { OdometerService } from '../../services/odometer.service';
+import { environment } from '../../environments/environment';
 
 
 @Component({
@@ -17,7 +17,8 @@ import { OdometerService } from '../../services/odometer.service';
   imports: [
     CommonModule,
     FormsModule,
-    ChronometerComponent
+    ChronometerComponent,
+    // MockGpsControlComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
@@ -30,6 +31,7 @@ export class HomeComponent {
   //--=====================================================================================
   //--=====================================================================================
 
+  showMockControl = environment.enableMockGPS;
   private map!: L.Map;
   private routeLine: L.Polyline | null = null;
   private gpsRouteLine: L.Polyline | null = null; // For GPS-tracked route

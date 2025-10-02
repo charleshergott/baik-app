@@ -1,0 +1,116 @@
+<div class="mock-control-panel">
+
+    <!-- Status Display -->
+    <div class="status-section">
+        <h3>Current Status</h3>
+        <div class="status-grid">
+            <div class="status-item">
+                <span class="label">Mode:</span>
+                <span class="value" [class.active]="isTracking">
+                    {{ isTracking ? '🟢 Active' : '🔴 Stopped' }}
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="label">Speed:</span>
+                <span class="value">{{ currentSpeed.toFixed(1) }} km/h</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Distance:</span>
+                <span class="value">{{ (tripDistance / 1000).toFixed(2) }} km</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Max Speed:</span>
+                <span class="value">{{ maxSpeed.toFixed(1) }} km/h</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Time:</span>
+                <span class="value">{{ formattedTime }}</span>
+            </div>
+            <div class="status-item">
+                <span class="label">GPS Quality:</span>
+                <span class="value" [class]="'quality-' + gpsQuality">
+                    {{ gpsQuality }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scenario Controls -->
+    <div class="scenario-section">
+        <h3>Scenarios</h3>
+        <div class="scenario-buttons">
+            <button *ngFor="let scenario of scenarios" (click)="setScenario(scenario.value)"
+                [class.active]="currentScenario === scenario.value" class="scenario-btn">
+                {{ scenario.icon }} {{ scenario.label }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Speed Control -->
+    <div class="custom-section">
+        <h3>Custom Settings</h3>
+        <div class="custom-controls">
+            <div class="control-group">
+                <label for="customSpeed">Speed (km/h):</label>
+                <input type="range" id="customSpeed" [(ngModel)]="customSpeed" min="0" max="60" step="1"
+                    (change)="setCustomSpeed()">
+                <span class="value">{{ customSpeed }} km/h</span>
+            </div>
+
+            <div class="control-group">
+                <label for="speedThreshold">Speed Threshold (km/h):</label>
+                <input type="range" id="speedThreshold" [(ngModel)]="speedThreshold" min="1" max="15" step="1"
+                    (change)="updateSpeedThreshold()">
+                <span class="value">{{ speedThreshold }} km/h</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Controls -->
+    <div class="location-section">
+        <h3>Location Presets</h3>
+        <div class="location-buttons">
+            <button *ngFor="let location of locations" (click)="teleportTo(location)" class="location-btn">
+                {{ location.icon }} {{ location.name }}
+            </button>
+        </div>
+    </div>
+
+    <!-- GPS Signal Controls -->
+    <div class="signal-section">
+        <h3>GPS Signal Simulation</h3>
+        <div class="signal-buttons">
+            <button (click)="simulateGoodSignal()" class="signal-btn good">
+                ✅ Good Signal
+            </button>
+            <button (click)="simulatePoorSignal()" class="signal-btn poor">
+                ⚠️ Poor Signal
+            </button>
+        </div>
+    </div>
+
+    <!-- Transport Controls -->
+    <div class="control-section">
+        <h3>Controls</h3>
+        <div class="control-buttons">
+            <button (click)="toggleTracking()" [class.stop]="isTracking" class="control-btn">
+                {{ isTracking ? '⏹️ Stop' : '▶️ Start' }}
+            </button>
+            <button (click)="resetStats()" class="control-btn reset">
+                🔄 Reset
+            </button>
+            <button (click)="startRouteRecording()" [disabled]="!isTracking || isRecording" class="control-btn">
+                📍 Start Route
+            </button>
+            <button (click)="stopRouteRecording()" [disabled]="!isRecording" class="control-btn">
+                🛑 Stop Route
+            </button>
+        </div>
+    </div>
+
+    <!-- Mock State Display -->
+    <div class="debug-section" *ngIf="mockState">
+        <h3>Mock State (Debug)</h3>
+        <pre>{{ mockState | json }}</pre>
+    </div>
+</div>

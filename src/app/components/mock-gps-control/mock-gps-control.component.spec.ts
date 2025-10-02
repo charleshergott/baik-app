@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { ItineraryComponent } from './itinerary.component';
+import { MockGpsControlComponent } from './mock-gps-control.component';
 
-describe('ItineraryComponent', () => {
-  let component: ItineraryComponent;
-  let fixture: ComponentFixture<ItineraryComponent>;
+describe('MockGpsControlComponent', () => {
+  let component: MockGpsControlComponent;
+  let fixture: ComponentFixture<MockGpsControlComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ItineraryComponent]
+      imports: [MockGpsControlComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(ItineraryComponent);
+    fixture = TestBed.createComponent(MockGpsControlComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
