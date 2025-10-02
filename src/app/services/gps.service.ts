@@ -39,6 +39,7 @@ export class GpsService {
   private readonly GPS_WARMUP_DURATION = 5000; // 5 seconds warmup period
   private readonly MIN_READINGS_FOR_MOVEMENT = 3; // Need 3 consistent readings to confirm movement
   private movementReadingsCount = 0;
+  private isFirstReading = true;
 
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
@@ -178,11 +179,7 @@ export class GpsService {
   }
 
   private async startGPS(): Promise<void> {
-    console.log('📡 Starting GPS with enhanced filtering');
-
-    // Mark GPS warmup start
-    this.gpsWarmupStartTime = Date.now();
-    console.log('🔄 GPS warming up... readings will stabilize in 5 seconds');
+    console.log('📡 Starting GPS - waiting for first lock...');
 
     const options: PositionOptions = {
       enableHighAccuracy: true,
@@ -208,10 +205,50 @@ export class GpsService {
     // Update GPS quality indicator
     this.updateGPSQuality(accuracy);
 
-    // Filter 0: GPS Warmup - ignore readings during warmup period
+    // Filter 0a: Very first reading - just establish baseline, don't calculate anything
+    if (this.isFirstReading) {
+      console.log('🎯 First GPS lock acquired - establishing baseline position');
+      const rawLat = position.coords.latitude;
+      const rawLon = position.coords.longitude;
+
+      // Initialize Kalman filter with first position
+      this.kalmanLat = rawLat;
+      this.kalmanLon = rawLon;
+      this.kalmanVariance = accuracy * accuracy;
+
+      // Set baseline position
+      this.lastPosition = {
+        latitude: rawLat,
+        longitude: rawLon,
+        timestamp: position.timestamp,
+        accuracy: accuracy
+      };
+      this.lastPositionTime = position.timestamp;
+
+      // Start warmup timer from first lock
+      this.gpsWarmupStartTime = Date.now();
+
+      this.isFirstReading = false;
+      return; // Exit without any calculations
+    }
+
+    // Filter 0b: GPS Warmup - ignore readings during warmup period
     const warmupElapsed = Date.now() - this.gpsWarmupStartTime;
     if (warmupElapsed < this.GPS_WARMUP_DURATION) {
       console.log(`🔄 GPS warming up... ${((this.GPS_WARMUP_DURATION - warmupElapsed) / 1000).toFixed(1)}s remaining`);
+
+      // Update baseline position during warmup but don't calculate speed
+      const rawLat = position.coords.latitude;
+      const rawLon = position.coords.longitude;
+      this.applyKalmanFilter(rawLat, rawLon, accuracy);
+
+      this.lastPosition = {
+        latitude: this.kalmanLat!,
+        longitude: this.kalmanLon!,
+        timestamp: position.timestamp,
+        accuracy: accuracy
+      };
+      this.lastPositionTime = position.timestamp;
       return;
     }
 
@@ -405,6 +442,9 @@ export class GpsService {
     this.lastPosition = null;
     this.lastPositionTime = 0;
     this.currentSpeed = 0;
+    this.gpsWarmupStartTime = 0;
+    this.movementReadingsCount = 0;
+    this.isFirstReading = true; // Reset for next GPS start
   }
 
   private addPointToRoute(latitude: number, longitude: number): void {
@@ -465,6 +505,16 @@ export class GpsService {
   setMaxRealisticSpeed(speedKmh: number): void {
     this.MAX_REALISTIC_SPEED_KMH = speedKmh;
     console.log(`🎯 Max realistic speed set to ${speedKmh} km/h`);
+  }
+
+  setMinSpeedThreshold(speedKmh: number): void {
+    this.MIN_SPEED_THRESHOLD = speedKmh;
+    console.log(`🎯 Min speed threshold set to ${speedKmh} km/h`);
+  }
+
+  // Check if GPS is still warming up
+  isGpsWarmingUp(): boolean {
+    return (Date.now() - this.gpsWarmupStartTime) < this.GPS_WARMUP_DURATION;
   }
 
   private generateId(): string {
