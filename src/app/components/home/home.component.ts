@@ -232,7 +232,7 @@ export class HomeComponent {
     const durationMin = Math.floor(stats.duration / 60);
 
     const name = prompt(
-      `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} knots\n\nEnter a name:`,
+      `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} kmh\n\nEnter a name:`,
       `Ride ${distanceKm}km`
     );
 

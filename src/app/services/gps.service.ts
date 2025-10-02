@@ -576,7 +576,7 @@ export class GpsService {
       endTime: endTime,
       createdAt: new Date(this.routeStartTime).toISOString(),
       lastUsed: new Date(endTime).toISOString(),
-      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min, Max Speed: ${this.routeMaxSpeed.toFixed(1)}kn, Avg Speed: ${averageSpeed.toFixed(1)}kn`
+      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min, Max Speed: ${this.routeMaxSpeed.toFixed(1)}kmh, Avg Speed: ${averageSpeed.toFixed(1)}kmh`
     };
 
     await this.saveRoute(route);
