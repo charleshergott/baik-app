@@ -356,7 +356,12 @@ export class HomeComponent {
   }
 
   private initializeMap(): void {
-    this.map = L.map('map').setView([40.7128, -74.0060], 8);
+
+
+    this.map = L.map('map', {
+      zoomControl: false,      // Removes zoom buttons
+      attributionControl: false // Removes attribution text
+    }).setView([40.7128, -74.0060], 8);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'

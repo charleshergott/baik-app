@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Position, SavedRoute, Waypoint } from '../interfaces/master';
 import { environment } from '../environments/environment.prod';
-import { Geolocation, Position as CapacitorPosition } from '@capacitor/geolocation';
 
 @Injectable({
   providedIn: 'root'
@@ -13,7 +12,7 @@ export class GpsService {
   private routeCoordinates$ = new BehaviorSubject<[number, number][]>([]);
 
   private isTracking = false;
-  private watchId: string | null = null;
+  private watchId: number | null = null;
 
   isGPSEnabled = false;
   private lastPosition: Position | null = null;
@@ -21,17 +20,19 @@ export class GpsService {
   currentSpeed = 0; // in knots
 
   // Enhanced filtering parameters
-  private readonly SPEED_HISTORY_LENGTH = 5;
+  private SPEED_HISTORY_LENGTH = 5;
   private speedHistory: number[] = [];
   MIN_SPEED_THRESHOLD = 5; // Minimum speed in km/h to consider as "moving"
-  private readonly MAX_ACCURACY_THRESHOLD = 20; // meters - ignore readings worse than this
-  private readonly STATIONARY_ACCURACY_MULTIPLIER = 2; // Use 2x accuracy as stationary radius
+  private MAX_ACCURACY_THRESHOLD = 20; // meters - ignore readings worse than this
+  private STATIONARY_ACCURACY_MULTIPLIER = 2; // Use 2x accuracy as stationary radius
+  private MAX_REALISTIC_SPEED_KMH = 80; // Maximum realistic speed for a bike in km/h
+  private MAX_ACCELERATION_MS2 = 5; // Maximum realistic acceleration in m/s² (bikes ~3-5)
 
   // Kalman filter variables for position smoothing
   private kalmanLat: number | null = null;
   private kalmanLon: number | null = null;
   private kalmanVariance = 1000; // Initial high uncertainty
-  private readonly PROCESS_NOISE = 0.5;
+  private PROCESS_NOISE = 0.5;
 
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
@@ -39,7 +40,7 @@ export class GpsService {
   private routeStartTime: number = 0;
   private routeDistance: number = 0;
   private routeMaxSpeed: number = 0;
-  private readonly MIN_DISTANCE_BETWEEN_POINTS = 5; // meters
+  private MIN_DISTANCE_BETWEEN_POINTS = 5; // meters
 
   // IndexedDB
   private db: IDBDatabase | null = null;
@@ -143,14 +144,9 @@ export class GpsService {
     if (this.isTracking) return;
 
     try {
-      // Request permissions first
-      const permission = await Geolocation.checkPermissions();
-
-      if (permission.location !== 'granted') {
-        const requested = await Geolocation.requestPermissions();
-        if (requested.location !== 'granted') {
-          throw new Error('Location permission denied');
-        }
+      // Check if geolocation is available
+      if (!('geolocation' in navigator)) {
+        throw new Error('Geolocation is not supported by this browser');
       }
 
       await this.startGPS();
@@ -166,7 +162,7 @@ export class GpsService {
     if (!this.isTracking) return;
 
     if (this.watchId !== null) {
-      await Geolocation.clearWatch({ id: this.watchId });
+      navigator.geolocation.clearWatch(this.watchId);
       this.watchId = null;
     }
 
@@ -178,26 +174,24 @@ export class GpsService {
   private async startGPS(): Promise<void> {
     console.log('📡 Starting GPS with enhanced filtering');
 
-    this.watchId = await Geolocation.watchPosition(
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 1000
-      },
-      (position, err) => {
-        if (err) {
-          console.error('GPS Error:', err);
-          return;
-        }
+    const options: PositionOptions = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 1000
+    };
 
-        if (position) {
-          this.processGPSPosition(position);
-        }
-      }
+    this.watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        this.processGPSPosition(position);
+      },
+      (error) => {
+        console.error('GPS Error:', error);
+      },
+      options
     );
   }
 
-  private processGPSPosition(position: CapacitorPosition): void {
+  private processGPSPosition(position: GeolocationPosition): void {
     const accuracy = position.coords.accuracy;
     this.currentAccuracy = accuracy;
 
@@ -313,6 +307,23 @@ export class GpsService {
     const speedKmh = speedMs * 3.6; // km/h
     const speedKnots = speedMs * 1.94384; // knots
 
+    // Filter 5: Check for unrealistic speeds
+    if (speedKmh > this.MAX_REALISTIC_SPEED_KMH) {
+      console.log(`⚠️ Speed spike detected and rejected: ${speedKmh.toFixed(1)} km/h`);
+      return { speedKmh: 0, speedKnots: 0 };
+    }
+
+    // Filter 6: Check for unrealistic acceleration
+    if (this.currentSpeed > 0) {
+      const lastSpeedMs = this.currentSpeed * 0.514444; // Convert knots to m/s
+      const acceleration = Math.abs(speedMs - lastSpeedMs) / timeDiff;
+
+      if (acceleration > this.MAX_ACCELERATION_MS2) {
+        console.log(`⚠️ Acceleration spike detected and rejected: ${acceleration.toFixed(1)} m/s²`);
+        return { speedKmh: 0, speedKnots: 0 };
+      }
+    }
+
     return { speedKmh, speedKnots };
   }
 
@@ -385,9 +396,10 @@ export class GpsService {
       // Update total route distance
       this.routeDistance += distance;
 
-      // Update max speed
-      if (this.currentSpeed > this.routeMaxSpeed) {
+      // Update max speed (only if it's realistic)
+      if (this.currentSpeed > this.routeMaxSpeed && this.currentSpeed * 1.852 <= this.MAX_REALISTIC_SPEED_KMH) {
         this.routeMaxSpeed = this.currentSpeed;
+        console.log(`🏆 New max speed: ${this.currentSpeed.toFixed(1)} kn (${(this.currentSpeed * 1.852).toFixed(1)} km/h)`);
       }
     }
 
@@ -413,6 +425,16 @@ export class GpsService {
 
   getMinSpeedThreshold(): number {
     return this.MIN_SPEED_THRESHOLD;
+  }
+
+  getMaxRealisticSpeed(): number {
+    return this.MAX_REALISTIC_SPEED_KMH;
+  }
+
+  // Allow runtime configuration
+  setMaxRealisticSpeed(speedKmh: number): void {
+    this.MAX_REALISTIC_SPEED_KMH = speedKmh;
+    console.log(`🎯 Max realistic speed set to ${speedKmh} km/h`);
   }
 
   private generateId(): string {
