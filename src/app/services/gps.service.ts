@@ -40,6 +40,7 @@ export class GpsService {
   private readonly MIN_READINGS_FOR_MOVEMENT = 3; // Need 3 consistent readings to confirm movement
   private movementReadingsCount = 0;
   private isFirstReading = true;
+  private hasBeenMoving = false;
 
   // Route tracking properties
   private routeCoordinates: [number, number][] = [];
@@ -275,17 +276,29 @@ export class GpsService {
     // Filter 3: Check if actually moving (considering accuracy)
     const isMoving = this.detectMovement(calculatedSpeed, accuracy);
 
-    // Filter 4: Require consecutive movement readings to confirm actual movement
+    // Filter 4: Require consecutive movement readings to confirm initial movement
     if (isMoving) {
       this.movementReadingsCount++;
     } else {
-      this.movementReadingsCount = 0;
+      // If we've been moving and now stopped, be more lenient (allow 2 stopped readings)
+      if (this.hasBeenMoving && this.movementReadingsCount > 0) {
+        this.movementReadingsCount--;
+      } else {
+        this.movementReadingsCount = 0;
+        this.hasBeenMoving = false;
+      }
       calculatedSpeed.speedKmh = 0;
       calculatedSpeed.speedKnots = 0;
     }
 
     // Only consider as truly moving if we have enough consecutive readings
     const confirmedMovement = this.movementReadingsCount >= this.MIN_READINGS_FOR_MOVEMENT;
+
+    // Once we've confirmed movement, remember it (for hysteresis)
+    if (confirmedMovement && !this.hasBeenMoving) {
+      this.hasBeenMoving = true;
+      console.log('🚀 Movement confirmed! Speed tracking active.');
+    }
 
     if (!confirmedMovement) {
       calculatedSpeed.speedKmh = 0;
@@ -398,10 +411,15 @@ export class GpsService {
     // If accuracy is poor, we need higher speed to confirm movement
     const effectiveThreshold = Math.max(
       this.MIN_SPEED_THRESHOLD,
-      accuracy * this.STATIONARY_ACCURACY_MULTIPLIER / 2 // Convert accuracy to speed threshold
+      accuracy * this.STATIONARY_ACCURACY_MULTIPLIER / 2
     );
 
-    return speed.speedKmh > effectiveThreshold;
+    // Use hysteresis: lower threshold to stay moving once we've started
+    const thresholdToUse = this.hasBeenMoving
+      ? effectiveThreshold * 0.7  // 30% lower to maintain "moving" state
+      : effectiveThreshold;        // Full threshold to enter "moving" state
+
+    return speed.speedKmh > thresholdToUse;
   }
 
   private smoothSpeed(speedKnots: number): number {
@@ -445,6 +463,7 @@ export class GpsService {
     this.gpsWarmupStartTime = 0;
     this.movementReadingsCount = 0;
     this.isFirstReading = true; // Reset for next GPS start
+    this.hasBeenMoving = false; // Reset movement state
   }
 
   private addPointToRoute(latitude: number, longitude: number): void {
