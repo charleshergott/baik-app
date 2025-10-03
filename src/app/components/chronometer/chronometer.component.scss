@@ -158,18 +158,73 @@ $muted-text: #bdc3c7;
 
 
 
+
 .chronometer {
-    flex: 1;
     background: black;
-    border: 2px solid #333;
-    border-radius: 12px;
-    color: #fff;
-    font-family: 'Courier New', monospace;
-    margin-top: 15px;
-    max-height: 100px;
+    font-family: "Courier New", monospace;
+    padding-top: 10px;
+    padding-bottom: 10px;
 
+    .display-wrapper {
+        display: flex;
+        justify-content: space-around;
 
+        .freeze-btn {
+            position: relative;
+            transition: all 0.3s ease;
+            background: none;
+            border: none;
+
+            .analog-clock {
+
+                .clock-face {
+                    width: 75px;
+                    height: 75px;
+                }
+            }
+        }
+
+        .freeze-state {
+            display: block;
+            margin-top: 8px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    }
 }
+
+.time-wrapper {
+    display: flex;
+    justify-content: space-around;
+    flex-direction: column;
+
+    .time-display {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+    }
+
+    .clock-face {
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+    }
+
+    .clock-number {
+        font-size: 16px;
+        font-weight: bold;
+        fill: #333;
+        font-family: Arial, sans-serif;
+    }
+}
+
+.chrono-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin: .5rem 0;
+}
+
 
 .lap-header {
     font-size: 0.85rem;
@@ -266,14 +321,6 @@ $muted-text: #bdc3c7;
     color: #00ff88;
 }
 
-.time-display {
-    display: flex;
-    align-items: baseline;
-    justify-content: center;
-
-
-}
-
 .main-time {
     font-size: 3rem;
     font-weight: bold;
@@ -284,13 +331,6 @@ $muted-text: #bdc3c7;
     font-size: 1.5rem;
     color: #888;
     margin-left: 0.2rem;
-}
-
-.chrono-controls {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin: .5rem 0;
 }
 
 .control-btn {
@@ -329,112 +369,6 @@ $muted-text: #bdc3c7;
     background: #333;
     color: #666;
     cursor: not-allowed;
-}
-
-
-/* Watch Styles */
-.watch-container {
-    display: flex;
-    flex-direction: column;
-    width: 50%;
-    gap: 5px;
-
-    // Main Watch Display
-    .watch {
-
-        .watch-display {
-
-            .current-time {
-                font-family: 'Courier New', monospace;
-                font-weight: bold;
-                color: $primary-blue;
-                text-shadow: 0 0 15px rgba(52, 152, 219, 0.6);
-                margin-bottom: 20px;
-                letter-spacing: 2px;
-            }
-
-            // Freeze Controls inside the watch
-            .freeze-controls {
-                display: flex;
-                gap: 15px;
-                justify-content: center;
-                flex-wrap: wrap;
-                margin-top: 20px;
-                align-items: center;
-
-                button {
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: 0.8em;
-                    cursor: pointer;
-                    transition: all 0.3s ease;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    min-width: 140px;
-                }
-
-                // Freeze button states
-                .freeze-btn {
-                    &.ready {
-                        background: linear-gradient(145deg, $success-green, lighten($success-green, 10%));
-                        color: white;
-                        box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
-
-                        &:hover {
-                            background: linear-gradient(145deg, lighten($success-green, 10%), $success-green);
-                            box-shadow: 0 6px 20px rgba(39, 174, 96, 0.4);
-                            transform: translateY(-2px);
-                        }
-                    }
-
-                    &.start-captured {
-                        background: linear-gradient(145deg, $warning-orange, darken($warning-orange, 10%));
-                        color: white;
-                        box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
-                        animation: pulse 2s infinite;
-
-                        &:hover {
-                            background: linear-gradient(145deg, darken($warning-orange, 10%), $warning-orange);
-                            box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4);
-                            transform: translateY(-2px);
-                        }
-                    }
-
-                    &.completed {
-                        background: linear-gradient(145deg, $purple, lighten($purple, 10%));
-                        color: white;
-                        box-shadow: 0 4px 15px rgba(142, 68, 173, 0.3);
-
-                        &:hover {
-                            background: linear-gradient(145deg, lighten($purple, 10%), $purple);
-                            box-shadow: 0 6px 20px rgba(142, 68, 173, 0.4);
-                            transform: translateY(-2px);
-                        }
-                    }
-                }
-
-                // Reset button
-                .reset-btn {
-                    background: linear-gradient(145deg, $gray, darken($gray, 10%));
-                    color: white;
-                    box-shadow: 0 4px 15px rgba(149, 165, 166, 0.3);
-
-                    &:hover:not(:disabled) {
-                        background: linear-gradient(145deg, darken($gray, 10%), $gray);
-                        box-shadow: 0 6px 20px rgba(149, 165, 166, 0.4);
-                        transform: translateY(-2px);
-                    }
-
-                    &:disabled {
-                        opacity: 0.5;
-                        cursor: not-allowed;
-                        transform: none !important;
-                    }
-                }
-            }
-        }
-    }
 }
 
 .frozen-times {
@@ -494,7 +428,6 @@ $muted-text: #bdc3c7;
     }
 }
 
-// Animations
 @keyframes pulse {
     0% {
         box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
@@ -542,7 +475,6 @@ $muted-text: #bdc3c7;
         }
     }
 }
-
 
 .analog-watch {
     display: flex;
@@ -651,13 +583,10 @@ $muted-text: #bdc3c7;
     }
 
     .current-time {
-        font-size: 20px;
+        align-items: center;
     }
 
-    .clock-face {
-        width: 140px;
-        height: 140px;
-    }
+
 
     .hour-hand {
         height: 40px;

@@ -18,41 +18,71 @@
                         <span class="stat-value">{{formatSpeed(speedData.avgSpeed)}}</span>
                     </div>
                 </div>
-
             </div>
 
-            <!-- Distance Display -->
             <div class="distance-display">
                 <span class="distance-label">DISTANCE</span>
                 <span class="distance-value">{{formatDistance(speedData.distance)}}</span>
             </div>
 
-            <!-- Chronometer Section -->
             <div class="chronometer">
-                <!-- Time Display -->
-                <div class="time-display">
-                    <div class="main-time">{{formatTime(elapsedTime)}}</div>
-                    <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
-                </div>
 
-                <!-- Main Controls -->
-                <div class="chrono-controls">
-                    <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning"
-                        class="control-btn">
-                        {{isRunning ? 'STOP' : 'START'}}
-                    </button>
-                    <button (click)="lap()" [disabled]="!isRunning" class="control-btn lap">
-                        LAP
-                    </button>
-                    <button (click)="reset()" [disabled]="isRunning" class="control-btn reset">
-                        RESET
-                    </button>
-                    <button class="{{getFreezeButtonClass()}}" (click)="onFreezeTime()">
-                        {{getFreezeButtonText()}}
-                    </button>
-                    <button *ngIf="state.frozenStopTime" class="reset-btn" (click)="onResetFrozenTimes()"
-                        [disabled]="state.freezeStep === 0">
-                        RESET TIMES
+                <div class="display-wrapper">
+                    <div class="time-wrapper">
+                        <div class="time-display">
+                            <div class="main-time">{{formatTime(elapsedTime)}}</div>
+                            <div class="milliseconds">.{{formatMilliseconds(elapsedTime)}}</div>
+                        </div>
+                        <div class="chrono-controls">
+                            <button (click)="startStop()" [class.start]="!isRunning" [class.stop]="isRunning"
+                                class="control-btn">
+                                {{isRunning ? 'STOP' : 'START'}}
+                            </button>
+                            <button (click)="lap()" [disabled]="!isRunning" class="control-btn lap">
+                                LAP
+                            </button>
+                            <button (click)="reset()" [disabled]="isRunning" class="control-btn reset">
+                                RESET
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Analog Clock -->
+                    <button class="freeze-btn" [class.freeze-step-1]="_chronometerService.currentFreezeStep === 1"
+                        [class.freeze-step-2]="_chronometerService.currentFreezeStep === 2"
+                        [attr.aria-label]="getFreezeButtonLabel()" (click)="onFreezeTime()">
+                        <div class="analog-clock">
+                            <svg viewBox="0 0 200 200" class="clock-face">
+                                <!-- Clock circle -->
+                                <circle cx="100" cy="100" r="95" fill="white" stroke="#333" stroke-width="2" />
+
+                                <!-- Hour markers -->
+                                <line *ngFor="let marker of hourMarkers" [attr.x1]="marker.x1" [attr.y1]="marker.y1"
+                                    [attr.x2]="marker.x2" [attr.y2]="marker.y2" stroke="#333"
+                                    [attr.stroke-width]="marker.major ? 3 : 1" />
+
+                                <!-- Numbers -->
+                                <text x="100" y="30" text-anchor="middle" class="clock-number">12</text>
+                                <text x="170" y="105" text-anchor="middle" class="clock-number">3</text>
+                                <text x="100" y="180" text-anchor="middle" class="clock-number">6</text>
+                                <text x="30" y="105" text-anchor="middle" class="clock-number">9</text>
+
+                                <!-- Hour hand -->
+                                <line x1="100" y1="100" [attr.x2]="hourHand.x" [attr.y2]="hourHand.y" stroke="#333"
+                                    stroke-width="6" stroke-linecap="round" />
+
+                                <!-- Minute hand -->
+                                <line x1="100" y1="100" [attr.x2]="minuteHand.x" [attr.y2]="minuteHand.y" stroke="#555"
+                                    stroke-width="4" stroke-linecap="round" />
+
+                                <!-- Second hand -->
+                                <line x1="100" y1="100" [attr.x2]="secondHand.x" [attr.y2]="secondHand.y"
+                                    stroke="#e74c3c" stroke-width="2" stroke-linecap="round" />
+
+                                <!-- Center dot -->
+                                <circle cx="100" cy="100" r="5" fill="#333" />
+                            </svg>
+                        </div>
                     </button>
                 </div>
 
@@ -65,17 +95,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Freeze Time Controls -->
-                <!-- <div class="freeze-controls">
-                    <button class="{{getFreezeButtonClass()}}" (click)="onFreezeTime()">
-                        {{getFreezeButtonText()}}
-                    </button>
-                    <button *ngIf="state.frozenStopTime" class="reset-btn" (click)="onResetFrozenTimes()"
-                        [disabled]="state.freezeStep === 0">
-                        RESET TIMES
-                    </button>
-                </div> -->
             </div>
         </div>
     </div>

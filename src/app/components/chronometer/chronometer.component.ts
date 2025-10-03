@@ -16,6 +16,13 @@ import { OdometerService } from '../../services/odometer.service';
 
 export class ChronometerComponent implements OnInit, OnDestroy {
 
+  hourHand = { x: 100, y: 50 };
+  minuteHand = { x: 100, y: 40 };
+  secondHand = { x: 100, y: 30 };
+  hourMarkers: Array<{ x1: number, y1: number, x2: number, y2: number, major: boolean }> = [];
+
+  private clockInterval?: any;
+
   currentState: ChronometerState = {
     isRunning: false,
     elapsedTime: 0,
@@ -53,7 +60,7 @@ export class ChronometerComponent implements OnInit, OnDestroy {
 
   constructor(
     private _cdr: ChangeDetectorRef,
-    private _chronometerService: ChronometerService,
+    public _chronometerService: ChronometerService,
     private _gpsService: GpsService,
     private _odometerService: OdometerService
   ) {
@@ -61,6 +68,12 @@ export class ChronometerComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Initialize hour markers
+    this.initializeHourMarkers();
+
+    // Start clock updates
+    this.updateClock();
+    this.clockInterval = setInterval(() => this.updateClock(), 1000);
     // Subscribe to chronometer state
     this.stateSubscription = this._chronometerService.state$.subscribe(
       state => {
@@ -131,6 +144,53 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     );
   }
 
+  private initializeHourMarkers() {
+    for (let i = 0; i < 60; i++) {
+      const angle = (i * 6 - 90) * (Math.PI / 180);
+      const isMajor = i % 5 === 0;
+      const innerRadius = isMajor ? 85 : 90;
+      const outerRadius = 95;
+
+      this.hourMarkers.push({
+        x1: 100 + innerRadius * Math.cos(angle),
+        y1: 100 + innerRadius * Math.sin(angle),
+        x2: 100 + outerRadius * Math.cos(angle),
+        y2: 100 + outerRadius * Math.sin(angle),
+        major: isMajor
+      });
+    }
+  }
+
+  private updateClock() {
+    const now = new Date();
+    const hours = now.getHours() % 12;
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+
+    // Calculate angles (0° is at top, rotating clockwise)
+    const hourAngle = ((hours + minutes / 60) * 30 - 90) * (Math.PI / 180);
+    const minuteAngle = ((minutes + seconds / 60) * 6 - 90) * (Math.PI / 180);
+    const secondAngle = (seconds * 6 - 90) * (Math.PI / 180);
+
+    // Hour hand (shorter)
+    this.hourHand = {
+      x: 100 + 40 * Math.cos(hourAngle),
+      y: 100 + 40 * Math.sin(hourAngle)
+    };
+
+    // Minute hand (longer)
+    this.minuteHand = {
+      x: 100 + 60 * Math.cos(minuteAngle),
+      y: 100 + 60 * Math.sin(minuteAngle)
+    };
+
+    // Second hand (longest)
+    this.secondHand = {
+      x: 100 + 70 * Math.cos(secondAngle),
+      y: 100 + 70 * Math.sin(secondAngle)
+    };
+  }
+
   /**
    * Convert speed based on current unit preference
    */
@@ -151,38 +211,15 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     this._chronometerService.freezeTime();
   }
 
-  onResetFrozenTimes(): void {
-    this._chronometerService.resetFrozenTimes();
-  }
-
   getTimeDifference(): string | null {
     return this._chronometerService.getTimeDifference();
   }
 
-  getFreezeButtonText(): string {
-    switch (this.currentState.freezeStep) {
-      case 0:
-        return 'CLOCK';
-      case 1:
-        return 'CLOCK STOP';
-      case 2:
-        return 'REBOOT';
-      default:
-        return 'FREEZE TIME';
-    }
-  }
-
-  getFreezeButtonClass(): string {
-    switch (this.currentState.freezeStep) {
-      case 0:
-        return 'freeze-btn ready';
-      case 1:
-        return 'freeze-btn start-captured';
-      case 2:
-        return 'freeze-btn completed';
-      default:
-        return 'freeze-btn';
-    }
+  getFreezeButtonLabel(): string {
+    const step = this._chronometerService.currentFreezeStep;
+    return step === 0 ? 'Freeze start time' :
+      step === 1 ? 'Freeze stop time' :
+        'Reset frozen times';
   }
 
   // Getters for template access
@@ -358,5 +395,9 @@ export class ChronometerComponent implements OnInit, OnDestroy {
     // Stop tracking
     this._odometerService.stopTracking();
     this._gpsService.stopTracking();
+
+    if (this.clockInterval) {
+      clearInterval(this.clockInterval);
+    }
   }
 }

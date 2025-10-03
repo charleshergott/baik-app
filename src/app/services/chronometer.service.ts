@@ -321,7 +321,6 @@ export class ChronometerService {
 
   public freezeTime(): void {
     const currentTime = this.getCurrentTime();
-
     if (this.freezeStep === 0) {
       // First click - capture start time
       this.frozenStartTime = currentTime;
@@ -334,13 +333,11 @@ export class ChronometerService {
       this.freezeStep = 2;
       console.log('Stop time frozen:', currentTime);
     } else {
-      // Reset and start over
+      // Third click - reset everything
       this.resetFrozenTimes();
-      this.frozenStartTime = currentTime;
-      this.freezeStep = 1;
-      console.log('Reset and new start time frozen:', currentTime);
+      console.log('Frozen times reset - ready for new cycle');
+      return; // Exit here without setting new start time
     }
-
     this.updateState();
   }
 
@@ -350,6 +347,10 @@ export class ChronometerService {
     this.freezeStep = 0;
     this.updateState();
     console.log('Frozen times reset');
+  }
+
+  public get currentFreezeStep(): number {
+    return this.freezeStep;
   }
 
   public getTimeDifference(): string | null {
