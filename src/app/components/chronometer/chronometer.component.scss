@@ -166,6 +166,25 @@ $muted-text: #bdc3c7;
         display: flex;
         justify-content: space-around;
 
+        .time-wrapper {
+            display: flex;
+            justify-content: space-around;
+            flex-direction: column;
+
+            .time-display {
+                display: flex;
+                align-items: baseline;
+                justify-content: center;
+            }
+
+            .clock-number {
+                font-size: 16px;
+                font-weight: bold;
+                fill: #333;
+                font-family: Arial, sans-serif;
+            }
+        }
+
         .freeze-btn {
             position: relative;
             transition: all 0.3s ease;
@@ -177,6 +196,20 @@ $muted-text: #bdc3c7;
                 .clock-face {
                     width: 75px;
                     height: 75px;
+                    border: 3px solid #4488ff;
+                    border-radius: 50%;
+                    position: relative;
+                    background: #111;
+
+                    /* Make it look button-like */
+                    box-shadow:
+                        inset 0 2px 4px rgba(255, 255, 255, 0.2),
+                        /* inner highlight */
+                        0 4px 8px rgba(0, 0, 0, 0.6);
+                    /* outer shadow */
+
+                    cursor: pointer;
+                    transition: all 0.2s ease;
                 }
             }
         }
@@ -190,30 +223,7 @@ $muted-text: #bdc3c7;
     }
 }
 
-.time-wrapper {
-    display: flex;
-    justify-content: space-around;
-    flex-direction: column;
 
-    .time-display {
-        display: flex;
-        align-items: baseline;
-        justify-content: center;
-    }
-
-    .clock-face {
-        width: 100%;
-        height: 100%;
-        filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
-    }
-
-    .clock-number {
-        font-size: 16px;
-        font-weight: bold;
-        fill: #333;
-        font-family: Arial, sans-serif;
-    }
-}
 
 .chrono-controls {
     display: flex;
@@ -477,14 +487,7 @@ $muted-text: #bdc3c7;
     margin: 2rem 0;
 }
 
-.clock-face {
-    width: 180px;
-    height: 180px;
-    border: 3px solid #4488ff;
-    border-radius: 50%;
-    position: relative;
-    background: #111;
-}
+
 
 .hour-hand,
 .minute-hand,

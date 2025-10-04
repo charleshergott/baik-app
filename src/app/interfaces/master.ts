@@ -1,83 +1,30 @@
-// src/app/models/interfaces.ts
-
-export interface Position {
-    latitude: number;
-    longitude: number;
-    altitude?: number;
-    heading?: number;
-    speed?: number;
-    timestamp: number;
-    accuracy?: number;
-}
-
-export interface ItineraryPoint {
-    id: number;
-    timestamp: Date;
-    latitude: number;
-    longitude: number;
-    altitude: number | null;
-    speed: number | null; // m/s from GPS, converted to km/h for display
-    accuracy: number;
-}
-
 export interface SavedRoute {
     id: string;
     name: string;
-    waypoints: Waypoint[];
-    coordinates: [number, number][]; // Array of [lat, lng] for quick map rendering
     distance: number; // in meters
     duration: number; // in seconds
-    maxSpeed: number; // in knots
-    averageSpeed: number; // in knots
-    startTime: number; // timestamp
-    endTime: number; // timestamp
+    maxSpeed: number;
+    averageSpeed: number;
+    startTime: number;
+    endTime: number;
     createdAt: string; // ISO string
     lastUsed?: string; // ISO string
     description?: string;
-}
-
-export interface Waypoint {
-    id: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    altitude?: number;
-    altitudeQNH?: number;  // QNH altitude
-    speedKnots?: number;   // Speed in knots
-    estimatedArrival?: string; // ETA time
-    routingDegrees?: number;   // Next routing in degrees
-    frequency?: string;    // Required frequency
-    notes?: string;
+    coordinates: [number, number][];
 }
 
 export interface Route {
     id: string;
     name: string;
-    waypoints: Waypoint[];
-    cruiseAltitude: number;
-    cruiseSpeed: number; // knots
     createdAt: Date;
 }
 
-export interface FlightAlert {
-    id: string;
-    type: 'waypoint' | 'altitude' | 'frequency' | 'time' | 'distance';
-    message: string;
-    triggerDistance?: number; // nautical miles
-    triggerAltitude?: number; // feet
-    waypointId?: string;
-    isActive: boolean;
-    triggered: boolean;
-}
-
-export interface NavigationData {
-    currentPosition: Position;
-    nextWaypoint?: Waypoint;
-    distanceToNext: number; // nautical miles
-    bearingToNext: number; // degrees
-    crossTrackError: number; // nautical miles
-    groundSpeed: number; // knots
-    estimatedTimeToNext: number; // minutes
+export interface Position {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    timestamp: number;
+    accuracy?: number;
 }
 
 export interface MovementState {
@@ -107,7 +54,6 @@ export interface CyclingTrip {
     id: string; // Date string (YYYY-MM-DD)
     startTime: Date;
     endTime?: Date;
-    points: ItineraryPoint[];
     totalDistance: number; // in meters
     maxSpeed: number; // in m/s
     averageSpeed: number; // in km/h

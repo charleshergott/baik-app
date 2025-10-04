@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
-import { Position, SavedRoute, Waypoint } from '../interfaces/master';
 import { OdometerService } from './odometer.service';
 import * as geolib from 'geolib';
+import { IDBService } from './idb.service';
+import { Position, SavedRoute } from '../interfaces/master';
 
 @Injectable({
   providedIn: 'root'
@@ -58,39 +59,11 @@ export class GpsService {
   gpsQuality$ = new BehaviorSubject<'excellent' | 'good' | 'fair' | 'poor'>('poor');
 
   constructor(
-    private _odometerService: OdometerService
+    private _odometerService: OdometerService,
+    private _IDBService: IDBService
   ) {
     console.log('GPS Service initialized (Real GPS Mode)');
-    this.dbInitialized = this.initIndexedDB();
-  }
-
-  private async initIndexedDB(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
-      request.onerror = () => {
-        console.error('IndexedDB failed to open');
-        reject(request.error);
-      };
-      request.onsuccess = () => {
-        this.db = request.result;
-        console.log('IndexedDB initialized');
-        resolve();
-      };
-      request.onupgradeneeded = (event: any) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
-          const objectStore = db.createObjectStore(this.STORE_NAME, {
-            keyPath: 'id'
-          });
-          objectStore.createIndex('createdAt', 'createdAt', { unique: false });
-          objectStore.createIndex('lastUsed', 'lastUsed', { unique: false });
-        }
-      };
-    });
-  }
-
-  async ensureDbReady(): Promise<void> {
-    await this.dbInitialized;
+    this.dbInitialized = this._IDBService.initIndexedDB();
   }
 
   getCurrentPosition(): Observable<Position | null> {
@@ -164,8 +137,6 @@ export class GpsService {
     );
   }
 
-
-
   private processGPSPosition(position: GeolocationPosition): void {
     const accuracy = position.coords.accuracy;
     this.currentAccuracy = accuracy;
@@ -237,7 +208,6 @@ export class GpsService {
     const pos: Position = {
       latitude: filtered.lat,
       longitude: filtered.lon,
-      heading: position.coords.heading || undefined,
       speed: smoothedSpeed / 3.6,
       timestamp: timestamp,
       accuracy: accuracy
@@ -432,25 +402,12 @@ export class GpsService {
     const duration = (endTime - this.routeStartTime) / 1000;
     const averageSpeed = duration > 0 ? (this.routeDistance / duration) * 3.6 : 0;
 
-    const waypoints: Waypoint[] = this.routeCoordinates.map((coord, index) => ({
-      id: this.generateId(),
-      name: `Point ${index + 1}`,
-      latitude: coord[0],
-      longitude: coord[1],
-      altitudeQNH: 0,
-      speedKnots: 0,
-      estimatedArrival: '',
-      routingDegrees: 0,
-      frequency: ''
-    }));
-
     const route: SavedRoute = {
       id: this.generateId(),
       name: name || `Ride ${new Date(this.routeStartTime).toLocaleString()}`,
-      waypoints: waypoints,
-      coordinates: [...this.routeCoordinates],
       distance: this.routeDistance,
       duration: duration,
+      coordinates: [...this.routeCoordinates],
       maxSpeed: this.routeMaxSpeed,
       averageSpeed: averageSpeed,
       startTime: this.routeStartTime,
@@ -460,104 +417,13 @@ export class GpsService {
       description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min`
     };
 
-    await this.saveRoute(route);
+    await this._IDBService.saveRoute(route);
     return route.id;
   }
 
-  private async saveRoute(route: SavedRoute): Promise<void> {
-    await this.dbInitialized;
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error('Database not initialized'));
-        return;
-      }
-      const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-      const objectStore = transaction.objectStore(this.STORE_NAME);
-      const request = objectStore.put(route);
-      request.onsuccess = () => {
-        console.log('Route saved with ID:', route.id);
-        resolve();
-      };
-      request.onerror = () => {
-        console.error('Failed to save route:', request.error);
-        reject(request.error);
-      };
-    });
-  }
-
-  async getAllRoutes(): Promise<SavedRoute[]> {
-    await this.dbInitialized;
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error('Database not initialized'));
-        return;
-      }
-      const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-      const objectStore = transaction.objectStore(this.STORE_NAME);
-      const request = objectStore.getAll();
-      request.onsuccess = () => {
-        const routes = request.result as SavedRoute[];
-        routes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        resolve(routes);
-      };
-      request.onerror = () => {
-        reject(request.error);
-      };
-    });
-  }
-
-  async getRoute(id: string): Promise<SavedRoute | null> {
-    await this.dbInitialized;
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error('Database not initialized'));
-        return;
-      }
-      const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
-      const objectStore = transaction.objectStore(this.STORE_NAME);
-      const request = objectStore.get(id);
-      request.onsuccess = () => {
-        resolve(request.result || null);
-      };
-      request.onerror = () => {
-        reject(request.error);
-      };
-    });
-  }
-
-  async updateRouteLastUsed(id: string): Promise<void> {
-    await this.dbInitialized;
-    const route = await this.getRoute(id);
-    if (route) {
-      route.lastUsed = new Date().toISOString();
-      await this.saveRoute(route);
-    }
-  }
-
-  async deleteRoute(id: string): Promise<void> {
-    await this.dbInitialized;
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        reject(new Error('Database not initialized'));
-        return;
-      }
-      const transaction = this.db.transaction([this.STORE_NAME], 'readwrite');
-      const objectStore = transaction.objectStore(this.STORE_NAME);
-      const request = objectStore.delete(id);
-      request.onsuccess = () => {
-        console.log('Route deleted:', id);
-        resolve();
-      };
-      request.onerror = () => {
-        reject(request.error);
-      };
-    });
-  }
-
   loadRouteToMap(route: SavedRoute): void {
-    this.routeCoordinates = route.waypoints.map(wp => [wp.latitude, wp.longitude] as [number, number]);
     this.routeCoordinates$.next(this.routeCoordinates);
-    this.updateRouteLastUsed(route.id);
+    this._IDBService.updateRouteLastUsed(route.id);
     console.log('Route loaded to map');
   }
 

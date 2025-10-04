@@ -1,7 +1,6 @@
 import { ChangeDetectorRef, Component, HostListener, NgZone } from '@angular/core';
-import { SavedRoute, Waypoint } from '../../interfaces/master';
+import { SavedRoute } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
-import { AlertService } from '../../services/alert.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { filter, Subscription, take } from 'rxjs';
@@ -10,6 +9,7 @@ import * as L from 'leaflet';
 import { ChronometerService } from '../../services/chronometer.service';
 import { OdometerService } from '../../services/odometer.service';
 import { environment } from '../../environments/environment';
+import { IDBService } from '../../services/idb.service';
 
 
 @Component({
@@ -18,7 +18,6 @@ import { environment } from '../../environments/environment';
     CommonModule,
     FormsModule,
     ChronometerComponent,
-    // MockGpsControlComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
@@ -34,9 +33,7 @@ export class HomeComponent {
   showMockControl = environment.enableMockGPS;
   private map!: L.Map;
   private routeLine: L.Polyline | null = null;
-  private gpsRouteLine: L.Polyline | null = null; // For GPS-tracked route
-  private distanceLabels: L.Marker[] = [];
-  waypoints: Waypoint[] = [];
+  private gpsRouteLine: L.Polyline | null = null;
   gpsEnabled = true;
   hasGpsSignal = false;
   routeLoaded = false;
@@ -44,10 +41,6 @@ export class HomeComponent {
   private markers: any[] = [];
   private userLocation?: { lat: number, lng: number };
 
-  // New properties for info window approach
-  activeWaypoint: Waypoint | null = null;
-  activeWaypointIndex: number = -1;
-  isNewWaypoint: boolean = false;
   infoWindowPosition = { x: 0, y: 0 };
   isMobile = false;
 
@@ -61,14 +54,11 @@ export class HomeComponent {
   //--=====================================================================================
   //--=====================================================================================
 
-  private waypointsSubscription?: Subscription;
+
   navigationActive = false;
   totalRouteDistance = 0;
   remainingDistance = 0;
   estimatedTimeRemaining = 0;
-  currentWaypointIndex = 0;
-  aircraftSpeed = 0; // Current aircraft speed in knots
-  distanceToNextWaypoint = 0; // Distance to next waypoint in nautical miles
   rollProgressPercentage = 0; // How far through the current waypoint roll we are
   isRolling = false;
   currentPosition: { latitude: number; longitude: number } | null = null;
@@ -86,11 +76,11 @@ export class HomeComponent {
 
   constructor(
     public _gpsService: GpsService,
-    private _alertService: AlertService,
     private _cdr: ChangeDetectorRef,
     private _ngZone: NgZone,
     private _chronometerService: ChronometerService,
-    private _odometerService: OdometerService
+    private _odometerService: OdometerService,
+    private _IDBService: IDBService
   ) {
     this.checkIfMobile();
 
@@ -128,15 +118,8 @@ export class HomeComponent {
 
   ngAfterViewInit(): void {
     this.initializeMap();
-
-    // Start GPS tracking immediately
     this._gpsService.startTracking();
-    this._alertService.requestNotificationPermission();
-
-    // Wait for GPS signal, then center ONCE and start position tracking
     this.initializeGPSWithMap();
-
-    // Subscribe to route updates for live tracking
     this.subscribeToRouteUpdates();
   }
 
@@ -264,7 +247,7 @@ export class HomeComponent {
 
   async loadSavedRoutes(): Promise<void> {
     try {
-      this.savedRoutes = await this._gpsService.getAllRoutes();
+      this.savedRoutes = await this._IDBService.getAllRoutes();
       console.log(`📂 Loaded ${this.savedRoutes.length} saved routes`);
     } catch (error) {
       console.error('Failed to load routes:', error);
@@ -277,7 +260,6 @@ export class HomeComponent {
 
   viewSavedRoute(route: SavedRoute): void {
 
-    // Load the route
     this._gpsService.loadRouteToMap(route);
 
     // Center map on route
@@ -297,7 +279,7 @@ export class HomeComponent {
     const confirmDelete = confirm(`Delete route "${route.name}"?`);
     if (confirmDelete) {
       try {
-        await this._gpsService.deleteRoute(route.id);
+        await this._IDBService.deleteRoute(route.id);
         await this.loadSavedRoutes();
         console.log('🗑️ Route deleted');
       } catch (error) {
@@ -363,37 +345,11 @@ export class HomeComponent {
       attribution: '© OpenStreetMap contributors'
     }).addTo(this.map);
 
-    this.map.on('click', (e: any) => {
-      this.onMapClick(e.latlng.lat, e.latlng.lng, e.containerPoint);
-    });
-
     if (this.gpsEnabled && this.hasGpsSignal) {
       this.centerMapOnUser();
     }
   }
 
-  onMapClick(lat: number, lng: number, screenPosition: any) {
-    const newWaypoint: Waypoint = {
-      id: this.generateId(),
-      name: '',
-      latitude: lat,
-      longitude: lng,
-      altitudeQNH: 3000,
-      speedKnots: 120,
-      estimatedArrival: '',
-      routingDegrees: 0,
-      frequency: ''
-    };
-
-    this.activeWaypoint = { ...newWaypoint };
-    this.activeWaypointIndex = this.waypoints.length;
-    this.isNewWaypoint = true;
-
-    this.infoWindowPosition = {
-      x: Math.min(screenPosition.x - 150, window.innerWidth - 320),
-      y: Math.max(screenPosition.y - 100, 10)
-    };
-  }
 
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 3440.065; // Nautical miles
@@ -411,30 +367,6 @@ export class HomeComponent {
     return degrees * (Math.PI / 180);
   }
 
-  getDistanceToPreviousWaypoint(index: number): number {
-    if (index === 0) return 0;
-    const wp1 = this.waypoints[index - 1];
-    const wp2 = this.waypoints[index];
-    return this.calculateDistance(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
-  }
-
-  getTotalRouteDistance(): number {
-    if (this.waypoints.length < 2) return 0;
-    let totalDistance = 0;
-    for (let i = 1; i < this.waypoints.length; i++) {
-      totalDistance += this.getDistanceToPreviousWaypoint(i);
-    }
-    return totalDistance;
-  }
-
-  getTotalRouteTime(): number {
-    const totalDistance = this.getTotalRouteDistance();
-    if (totalDistance === 0) return 0;
-    const waypointsWithSpeed = this.waypoints.filter(wp => wp.speedKnots && wp.speedKnots > 0);
-    if (waypointsWithSpeed.length === 0) return 0;
-    const averageSpeed = waypointsWithSpeed.reduce((sum, wp) => sum + (wp.speedKnots || 0), 0) / waypointsWithSpeed.length;
-    return totalDistance / averageSpeed;
-  }
 
   private centerMapOnUser(): void {
     this._gpsService.getCurrentPosition().subscribe(position => {
@@ -483,33 +415,14 @@ export class HomeComponent {
     }
   }
 
-  private generateId(): string {
-    return Math.random().toString(36).substr(2, 9);
-  }
-
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
     this.checkIfMobile();
   }
 
-  getStatusMessage(): string {
-    if (!this.navigationActive) return 'No active route';
-    if (this.currentWaypointIndex >= this.waypoints.length) return 'Route completed';
-    const remaining = this.waypoints.length - this.currentWaypointIndex;
-    return `${remaining} waypoint${remaining !== 1 ? 's' : ''} remaining`;
-  }
 
   toggleDistances(): void {
     this.showDistances = !this.showDistances;
-  }
-
-  getProgressiveRollOffset(): number {
-    const waypointHeight = 100;
-    return (this.rollProgressPercentage / 100) * waypointHeight;
-  }
-
-  getAircraftPositionOffset(): number {
-    return this.aircraftOffset;
   }
 
   ngOnDestroy(): void {
