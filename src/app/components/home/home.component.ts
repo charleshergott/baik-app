@@ -217,19 +217,12 @@ export class HomeComponent {
     console.log('🎬 Started recording route');
   }
 
-  stopRecording(): void {
-    this._gpsService.stopRouteRecording();
-    this.isRecordingRoute = false;
-    console.log('⏹️ Stopped recording route');
-  }
-
   async saveRoute(): Promise<void> {
     if (!this.isRecordingRoute && this._gpsService.getCurrentRoute().length === 0) {
       alert('No route to save');
       return;
     }
 
-    this.stopRecording();
     const stats = this._odometerService.getTripStats();
 
     // Use correct property names from OdometerStats
@@ -283,10 +276,6 @@ export class HomeComponent {
   }
 
   viewSavedRoute(route: SavedRoute): void {
-    // Clear current recording if any
-    if (this.isRecordingRoute) {
-      this.stopRecording();
-    }
 
     // Load the route
     this._gpsService.loadRouteToMap(route);
@@ -301,7 +290,7 @@ export class HomeComponent {
   }
 
   async deleteSavedRoute(route: SavedRoute, event: Event): Promise<void> {
-    event.stopPropagation(); // Prevent viewSavedRoute from firing
+    event.stopPropagation();
 
     if (!route.id) return;
 
@@ -364,7 +353,6 @@ export class HomeComponent {
   }
 
   private initializeMap(): void {
-
 
     this.map = L.map('map', {
       zoomControl: false,      // Removes zoom buttons

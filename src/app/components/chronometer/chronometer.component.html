@@ -17,13 +17,14 @@
                         <span class="stat-label">AVG</span>
                         <span class="stat-value">{{formatSpeed(speedData.avgSpeed)}}</span>
                     </div>
+                    <div class="stat-item">
+                        <span class="stat-label">DIST</span>
+                        <span class="stat-value">{{formatDistance(speedData.distance)}}</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="distance-display">
-                <span class="distance-label">DISTANCE</span>
-                <span class="distance-value">{{formatDistance(speedData.distance)}}</span>
-            </div>
+
 
             <div class="chronometer">
 
@@ -90,7 +91,7 @@
                 <div class="lap-times" *ngIf="lapTimes.length > 0">
                     <div class="lap-list">
                         <div class="lap-item" *ngFor="let lapTime of lapTimes; let i = index">
-                            <span class="lap-number">Lap {{getLapNumber(i)}}</span>
+                            <span class="lap-number">L. {{getLapNumber(i)}}</span>
                             <span class="lap-time">{{formatLapTime(lapTime)}}</span>
                         </div>
                     </div>

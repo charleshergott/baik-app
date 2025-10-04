@@ -7,18 +7,10 @@
         <div class="map-wrapper">
             <div id="map" class="map-container"></div>
         </div>
-        <!-- <app-mock-gps-control *ngIf="showMockControl"></app-mock-gps-control> -->
     </div>
 
 
     <div class="load-route-btn">
-        <!-- <button *ngIf="!isRecordingRoute" (click)="startRecording()" [disabled]="!hasGpsSignal" class="btn-start">
-            🎬 Start Recording
-        </button> -->
-
-        <button *ngIf="isRecordingRoute" (click)="stopRecording()" class="btn-stop">
-            ⏹️
-        </button>
 
         <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="saveRoute()"
             class="btn-save">
@@ -33,7 +25,7 @@
             class="btn-clear">
             🗑️
         </button>
-        <small>v.47.031025</small>
+        <small>v.48.041025</small>
     </div>
 
 </div>
