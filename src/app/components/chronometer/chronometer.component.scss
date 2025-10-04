@@ -237,6 +237,16 @@ $muted-text: #bdc3c7;
             text-align: center;
         }
     }
+
+    .version {
+        display: flex;
+        justify-content: center;
+
+        small {
+            font-size: 10px;
+        }
+    }
+
 }
 
 
