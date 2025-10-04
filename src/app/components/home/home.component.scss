@@ -646,17 +646,6 @@ app-chronometer {
             transition: opacity 0.3s ease;
         }
 
-        &:hover {
-            transform: translateY(-2px) scale(1.05);
-            box-shadow:
-                0 8px 20px rgba(0, 0, 0, 0.2),
-                0 4px 8px rgba(0, 0, 0, 0.15);
-
-            &::before {
-                opacity: 1;
-            }
-        }
-
         &:active {
             transform: translateY(0) scale(0.98);
             box-shadow:
@@ -668,51 +657,22 @@ app-chronometer {
     .btn-start {
         background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
         color: white;
-
-        &:hover {
-            background: linear-gradient(135deg, #5bc160 0%, #4CAF50 100%);
-            box-shadow:
-                0 8px 20px rgba(76, 175, 80, 0.4),
-                0 4px 8px rgba(76, 175, 80, 0.2);
-        }
     }
 
     .btn-stop {
         background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
         color: white;
         animation: pulse 2s ease-in-out infinite;
-
-        &:hover {
-            background: linear-gradient(135deg, #ff5a4e 0%, #f44336 100%);
-            box-shadow:
-                0 8px 20px rgba(244, 67, 54, 0.4),
-                0 4px 8px rgba(244, 67, 54, 0.2);
-            animation: none;
-        }
     }
 
     .btn-save {
         background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
         color: white;
-
-        &:hover {
-            background: linear-gradient(135deg, #42a5f5 0%, #2196F3 100%);
-            box-shadow:
-                0 8px 20px rgba(33, 150, 243, 0.4),
-                0 4px 8px rgba(33, 150, 243, 0.2);
-        }
     }
 
     .btn-clear {
         background: linear-gradient(135deg, #757575 0%, #616161 100%);
         color: white;
-
-        &:hover {
-            background: linear-gradient(135deg, #9E9E9E 0%, #757575 100%);
-            box-shadow:
-                0 8px 20px rgba(117, 117, 117, 0.3),
-                0 4px 8px rgba(117, 117, 117, 0.15);
-        }
     }
 
     .btn-saved-routes {
@@ -720,14 +680,15 @@ app-chronometer {
         color: white;
         font-weight: 600;
         font-size: 14px;
-
-        &:hover {
-            background: linear-gradient(135deg, #FFB74D 0%, #FF9800 100%);
-            box-shadow:
-                0 8px 20px rgba(255, 152, 0, 0.4),
-                0 4px 8px rgba(255, 152, 0, 0.2);
-        }
     }
+}
+
+.contacts {
+    position: absolute;
+    bottom: 10%;
+    background: none;
+    border: none;
+    z-index: 2;
 }
 
 @keyframes pulse {

@@ -10,6 +10,7 @@ import { ChronometerService } from '../../services/chronometer.service';
 import { OdometerService } from '../../services/odometer.service';
 import { environment } from '../../environments/environment';
 import { IDBService } from '../../services/idb.service';
+import { Router } from '@angular/router';
 
 
 @Component({
@@ -80,7 +81,8 @@ export class HomeComponent {
     private _ngZone: NgZone,
     private _chronometerService: ChronometerService,
     private _odometerService: OdometerService,
-    private _IDBService: IDBService
+    private _IDBService: IDBService,
+    private _router: Router
   ) {
     this.checkIfMobile();
 
@@ -424,6 +426,11 @@ export class HomeComponent {
 
   toggleDistances(): void {
     this.showDistances = !this.showDistances;
+  }
+
+  goToContacts() {
+    console.log('GO TO INFO')
+    this._router.navigate(['/info']);
   }
 
   ngOnDestroy(): void {

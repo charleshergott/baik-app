@@ -1,0 +1,108 @@
+ .company-info-container {
+     max-width: 800px;
+     margin: 0 auto;
+     padding: 2rem;
+     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+ }
+
+ .company-header {
+     text-align: center;
+     margin-bottom: 2rem;
+     padding-bottom: 2rem;
+     border-bottom: 2px solid #e0e0e0;
+ }
+
+ .company-header h1 {
+     font-size: 2.5rem;
+     color: #2c3e50;
+     margin: 0 0 0.5rem 0;
+ }
+
+ .tagline {
+     font-size: 1.1rem;
+     color: #7f8c8d;
+     font-style: italic;
+     margin: 0;
+ }
+
+ .company-description {
+     margin-bottom: 2rem;
+ }
+
+ .company-description h2,
+ .contact-section h2 {
+     color: #34495e;
+     font-size: 1.5rem;
+     margin-bottom: 1rem;
+ }
+
+ .company-description p {
+     line-height: 1.6;
+     color: #555;
+ }
+
+ .contact-grid {
+     display: grid;
+     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+     gap: 1.5rem;
+     margin-bottom: 2rem;
+ }
+
+ .contact-item {
+     padding: 1rem;
+     background-color: #f8f9fa;
+     border-radius: 8px;
+ }
+
+ .contact-label {
+     font-weight: 600;
+     color: #2c3e50;
+     display: block;
+     margin-bottom: 0.5rem;
+ }
+
+ .contact-item p {
+     margin: 0;
+     color: #555;
+ }
+
+ .contact-item a {
+     color: #3498db;
+     text-decoration: none;
+ }
+
+ .contact-item a:hover {
+     text-decoration: underline;
+ }
+
+ .business-hours {
+     margin-top: 2rem;
+     padding: 1rem;
+     background-color: #f8f9fa;
+     border-radius: 8px;
+     text-align: center;
+ }
+
+ .business-hours h3 {
+     color: #34495e;
+     margin: 0 0 0.5rem 0;
+ }
+
+ .business-hours p {
+     margin: 0;
+     color: #555;
+ }
+
+ @media (max-width: 600px) {
+     .company-info-container {
+         padding: 1rem;
+     }
+
+     .company-header h1 {
+         font-size: 2rem;
+     }
+
+     .contact-grid {
+         grid-template-columns: 1fr;
+     }
+ }
