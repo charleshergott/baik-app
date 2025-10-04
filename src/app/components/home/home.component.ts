@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, HostListener, NgZone } from '@angular/core';
+import { ChangeDetectorRef, Component, HostListener, isDevMode, NgZone } from '@angular/core';
 import { SavedRoute } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
 import { CommonModule } from '@angular/common';
@@ -90,12 +90,11 @@ export class HomeComponent {
     });
   }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     // Run animation outside Angular zone
     this._ngZone.runOutsideAngular(() => {
       this.animationInterval = setInterval(() => {
         this.aircraftOffset = Math.sin(Date.now() / 1000) * 2;
-        // Only trigger change detection occasionally for the animation
         this._ngZone.run(() => {
           this._cdr.detectChanges();
         });
@@ -112,7 +111,11 @@ export class HomeComponent {
         );
       });
 
-    // Load saved routes on init
+    if (isDevMode()) {
+      await this._gpsService.seedMockRoutesIfEmpty();
+    }
+
+    // Load routes after seeding
     this.loadSavedRoutes();
   }
 
@@ -149,7 +152,7 @@ export class HomeComponent {
     });
   }
 
-  // Route tracking methods
+
   private subscribeToRouteUpdates(): void {
     this.routeSubscription = this._gpsService.getRouteCoordinates().subscribe(coordinates => {
       if (coordinates.length > 0) {
@@ -207,10 +210,8 @@ export class HomeComponent {
     }
 
     const stats = this._odometerService.getTripStats();
-
-    // Use correct property names from OdometerStats
-    const distanceKm = (stats.tripDistance / 1000).toFixed(2); // Changed to .toFixed(2) for better precision
-    const durationMin = Math.floor(stats.movingTime / 60); // Use movingTime, not duration
+    const distanceKm = (stats.tripDistance / 1000).toFixed(2);
+    const durationMin = Math.floor(stats.movingTime / 60);
 
     const name = prompt(
       `Save this ride?\n\nDistance: ${distanceKm} km\nDuration: ${durationMin} min\nMax Speed: ${stats.maxSpeed.toFixed(1)} km/h\nAvg Speed: ${stats.averageSpeed.toFixed(1)} km/h\n\nEnter a name:`,
@@ -219,7 +220,7 @@ export class HomeComponent {
 
     if (name) {
       try {
-        // Pass the stats to saveCurrentRoute so it uses odometer data
+
         const description = `Distance: ${distanceKm}km, Duration: ${durationMin}min, Max: ${stats.maxSpeed.toFixed(1)}km/h, Avg: ${stats.averageSpeed.toFixed(1)}km/h`;
         const id = await this._gpsService.saveCurrentRoute(name, description);
 

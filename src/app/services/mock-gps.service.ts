@@ -121,7 +121,6 @@ export class MockGpsService {
     const position: Position = {
       latitude: lat,
       longitude: lon,
-      heading: this.currentHeading,
       speed: this.currentSpeed, // m/s
       timestamp: Date.now(),
       accuracy: Math.max(5, accuracy)
@@ -260,7 +259,6 @@ export class MockGpsService {
     const position: Position = {
       latitude: lat,
       longitude: lon,
-      heading: 0,
       speed: 0,
       timestamp: Date.now(),
       accuracy: this.currentAccuracy

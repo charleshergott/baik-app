@@ -5,6 +5,7 @@ import { OdometerStats, Position, SpeedStats } from '../interfaces/master';
 @Injectable({
   providedIn: 'root'
 })
+
 export class OdometerService implements OnDestroy {
 
   // Speed tracking

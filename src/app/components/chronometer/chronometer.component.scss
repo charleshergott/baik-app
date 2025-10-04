@@ -159,17 +159,17 @@ $muted-text: #bdc3c7;
 .chronometer {
     background: black;
     font-family: "Courier New", monospace;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding: 10px 0;
 
     .display-wrapper {
         display: flex;
         justify-content: space-around;
+        align-items: center;
 
         .time-wrapper {
             display: flex;
-            justify-content: space-around;
             flex-direction: column;
+            justify-content: space-around;
 
             .time-display {
                 display: flex;
@@ -187,29 +187,43 @@ $muted-text: #bdc3c7;
 
         .freeze-btn {
             position: relative;
-            transition: all 0.3s ease;
             background: none;
             border: none;
+            padding: 0;
+            cursor: pointer;
+            outline: none;
 
             .analog-clock {
-
                 .clock-face {
                     width: 75px;
                     height: 75px;
                     border: 3px solid #4488ff;
                     border-radius: 50%;
+                    background: radial-gradient(circle at 30% 30%, #222, #000);
                     position: relative;
-                    background: #111;
 
-                    /* Make it look button-like */
-                    box-shadow:
-                        inset 0 2px 4px rgba(255, 255, 255, 0.2),
-                        /* inner highlight */
-                        0 4px 8px rgba(0, 0, 0, 0.6);
-                    /* outer shadow */
+                    /* Make the border feel alive */
+                    animation: borderPulse 2s infinite alternate;
+                    transition: transform 0.15s ease;
 
-                    cursor: pointer;
-                    transition: all 0.2s ease;
+                    &:active {
+                        transform: scale(0.92);
+                    }
+                }
+            }
+
+            /* Subtle pulsating effect on the border */
+            @keyframes borderPulse {
+                0% {
+                    border: 3px solid #4488ff;
+                }
+
+                50% {
+                    border-color: #ff99ff;
+                }
+
+                100% {
+                    border-color: #d966ff;
                 }
             }
         }
@@ -219,6 +233,8 @@ $muted-text: #bdc3c7;
             margin-top: 8px;
             font-size: 12px;
             font-weight: bold;
+            color: #66aaff;
+            text-align: center;
         }
     }
 }

@@ -48,11 +48,11 @@ export class GpsService {
   private lastUpdateTime: number | null = null;
 
   // IndexedDB
-  private db: IDBDatabase | null = null;
+  // private db: IDBDatabase | null = null;
   private dbInitialized: Promise<void>;
-  private readonly DB_NAME = 'BikeRoutesDB';
-  private readonly DB_VERSION = 1;
-  private readonly STORE_NAME = 'routes';
+  // private readonly DB_NAME = 'BikeRoutesDB';
+  // private readonly DB_VERSION = 1;
+  // private readonly STORE_NAME = 'routes';
 
   // GPS Quality tracking
   currentAccuracy: number = 0;
@@ -391,6 +391,93 @@ export class GpsService {
 
     this.routeCoordinates.push([latitude, longitude]);
     this.routeCoordinates$.next([...this.routeCoordinates]);
+  }
+
+  async seedMockRoutesIfEmpty(): Promise<void> {
+    try {
+      const existingRoutes = await this._IDBService.getAllRoutes();
+
+      if (existingRoutes.length === 0) {
+        console.log('🌱 Seeding mock routes for development...');
+        const mockRoutes = this.generateMockRoutes();
+
+        for (const route of mockRoutes) {
+          await this._IDBService.saveRoute(route);
+        }
+
+        console.log(`✅ Seeded ${mockRoutes.length} mock routes`);
+      } else {
+        console.log(`ℹ️ Database already has ${existingRoutes.length} routes, skipping seed`);
+      }
+    } catch (error) {
+      console.error('Error seeding mock routes:', error);
+    }
+  }
+
+  private generateMockRoutes(): SavedRoute[] {
+    const now = Date.now();
+
+    return [
+      {
+        id: this.generateId(),
+        name: 'Morning Commute',
+        distance: 5200,
+        duration: 1320, // 22 min
+        coordinates: this.generateMockCoordinates(5200),
+        maxSpeed: 32.5,
+        averageSpeed: 23.6,
+        startTime: now - 86400000, // 1 day ago
+        endTime: now - 86400000 + 1320000,
+        createdAt: new Date(now - 86400000).toISOString(),
+        lastUsed: new Date(now - 86400000 + 1320000).toISOString(),
+        description: 'Distance: 5.20km, Duration: 22min, Max: 32.5km/h, Avg: 23.6km/h'
+      },
+      {
+        id: this.generateId(),
+        name: 'Evening Ride',
+        distance: 8300,
+        duration: 2100, // 35 min
+        coordinates: this.generateMockCoordinates(8300),
+        maxSpeed: 38.2,
+        averageSpeed: 23.8,
+        startTime: now - 43200000, // 12 hours ago
+        endTime: now - 43200000 + 2100000,
+        createdAt: new Date(now - 43200000).toISOString(),
+        lastUsed: new Date(now - 43200000 + 2100000).toISOString(),
+        description: 'Distance: 8.30km, Duration: 35min, Max: 38.2km/h, Avg: 23.8km/h'
+      },
+      {
+        id: this.generateId(),
+        name: 'Quick Trip',
+        distance: 2100,
+        duration: 480, // 8 min
+        coordinates: this.generateMockCoordinates(2100),
+        maxSpeed: 28.5,
+        averageSpeed: 26.3,
+        startTime: now - 7200000, // 2 hours ago
+        endTime: now - 7200000 + 480000,
+        createdAt: new Date(now - 7200000).toISOString(),
+        lastUsed: new Date(now - 7200000 + 480000).toISOString(),
+        description: 'Distance: 2.10km, Duration: 8min, Max: 28.5km/h, Avg: 26.3km/h'
+      }
+    ];
+  }
+
+  private generateMockCoordinates(distance: number): [number, number][] {
+    const startLat = 40.7128;
+    const startLng = -74.0060;
+    const points: [number, number][] = [];
+    const numPoints = Math.floor(distance / 100); // Point every 100m
+
+    for (let i = 0; i < numPoints; i++) {
+      // Create a curved path with some randomness
+      const angle = (i / numPoints) * Math.PI * 2;
+      const lat = startLat + (Math.sin(angle) * 0.01) + (i * 0.0001);
+      const lng = startLng + (Math.cos(angle) * 0.01) + (i * 0.0001);
+      points.push([lat, lng]);
+    }
+
+    return points;
   }
 
   async saveCurrentRoute(name?: string, description?: string): Promise<string> {

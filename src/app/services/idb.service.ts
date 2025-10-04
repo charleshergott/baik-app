@@ -4,15 +4,18 @@ import { SavedRoute } from '../interfaces/master';
 @Injectable({
   providedIn: 'root'
 })
+
 export class IDBService {
 
   private db: IDBDatabase | null = null;
-  private dbInitialized!: Promise<void>;
+  public dbInitialized!: Promise<void>;
   private readonly DB_NAME = 'BikeRoutesDB';
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'routes';
 
-  constructor() { }
+  constructor() {
+    this.dbInitialized = this.initIndexedDB();
+  }
 
   async initIndexedDB(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -41,6 +44,28 @@ export class IDBService {
 
   async ensureDbReady(): Promise<void> {
     await this.dbInitialized;
+  }
+
+  async getRoutesCount(): Promise<number> {
+    await this.dbInitialized;
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
+      const objectStore = transaction.objectStore(this.STORE_NAME);
+      const request = objectStore.count();
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+
+      request.onerror = () => {
+        reject(request.error);
+      };
+    });
   }
 
   async saveRoute(route: SavedRoute): Promise<void> {
