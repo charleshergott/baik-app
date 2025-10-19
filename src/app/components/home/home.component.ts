@@ -493,7 +493,7 @@ export class HomeComponent {
   }
 
   formatDistance(kilometers: number): string {
-    const m = kilometers / 1000;
+    const m = kilometers;
     return m > 1000 ? `${m.toFixed(0)}m` : `${m.toFixed(2)}km`;
   }
 
