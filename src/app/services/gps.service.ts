@@ -481,10 +481,27 @@ export class GpsService {
   }
 
   loadRouteToMap(route: SavedRoute): void {
-    this.routeCoordinates$.next(this.routeCoordinates);
-    this._IDBService.updateRouteLastUsed(route.id);
-    console.log('Route loaded to map');
+    console.log('[loadRouteToMap] ▶ Called');
+
+    if (!route) {
+      console.warn('[loadRouteToMap] ⚠️ No route provided!');
+      return;
+    }
+
+    // Update internal property (optional, if you track it)
+    this.routeCoordinates = route.coordinates;
+
+    console.log(`[loadRouteToMap] 📡 Emitting ${route.coordinates.length} coordinates to routeCoordinates$`);
+    this.routeCoordinates$.next(route.coordinates); // 👈 emit the actual route
+
+    this._IDBService.updateRouteLastUsed(route.id)
+      .then(() => console.log(`[loadRouteToMap] ✅ Updated lastUsed for route ${route.id}`))
+      .catch(err => console.error(`[loadRouteToMap] ❌ Failed to update lastUsed for route ${route.id}:`, err));
+
+    console.log('[loadRouteToMap] 🗺️ Route loaded to map');
   }
+
+
 
   generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
