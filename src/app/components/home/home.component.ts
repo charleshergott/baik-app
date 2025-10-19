@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, HostListener, isDevMode, NgZone } from '@angular/core';
-import { SavedRoute } from '../../interfaces/master';
+import { RouteType, SavedRoute } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +11,7 @@ import { OdometerService } from '../../services/odometer.service';
 import { environment } from '../../environments/environment';
 import { IDBService } from '../../services/idb.service';
 import { Router } from '@angular/router';
+import { MockRouteService } from '../../services/mock-route.service';
 
 
 @Component({
@@ -31,6 +32,10 @@ export class HomeComponent {
   //--=====================================================================================
   //--=====================================================================================
 
+  private routeMaxSpeed: number = 0;
+  private routeDistance: number = 0;
+  private routeStartTime: number = 0;
+  routeCoordinates: any[] = [];
   showMockControl = environment.enableMockGPS;
   private map!: L.Map;
   private routeLine: L.Polyline | null = null;
@@ -41,7 +46,7 @@ export class HomeComponent {
   private userLocationMarker: any;
   private markers: any[] = [];
   private userLocation?: { lat: number, lng: number };
-
+  environment = environment;
   infoWindowPosition = { x: 0, y: 0 };
   isMobile = false;
 
@@ -82,7 +87,8 @@ export class HomeComponent {
     private _chronometerService: ChronometerService,
     private _odometerService: OdometerService,
     private _IDBService: IDBService,
-    private _router: Router
+    private _router: Router,
+    private _mockRouteService: MockRouteService
   ) {
     this.checkIfMobile();
 
@@ -117,15 +123,30 @@ export class HomeComponent {
       await this._gpsService.seedMockRoutesIfEmpty();
     }
 
-    // Load routes after seeding
-    this.loadSavedRoutes();
   }
 
-  ngAfterViewInit(): void {
+  async ngAfterViewInit(): Promise<void> {
+    // console.log('[ngAfterViewInit] ▶ Starting');
+
+    //  console.log('[ngAfterViewInit] 1️⃣ Initializing map...');
     this.initializeMap();
+    //  console.log('[ngAfterViewInit] ✅ Map initialized');
+
+    //  console.log('[ngAfterViewInit] 2️⃣ Starting GPS tracking...');
     this._gpsService.startTracking();
+    // console.log('[ngAfterViewInit] ✅ GPS tracking started');
+
+    // console.log('[ngAfterViewInit] 3️⃣ Initializing GPS with map...');
     this.initializeGPSWithMap();
+    // console.log('[ngAfterViewInit] ✅ GPS initialized with map');
+
+    // console.log('[ngAfterViewInit] 4️⃣ Subscribing to route updates...');
     this.subscribeToRouteUpdates();
+    //  console.log('[ngAfterViewInit] ✅ Subscribed to route updates');
+
+    console.log('[ngAfterViewInit] 5️⃣ Loading saved routes...');
+    await this.loadSavedRoutes();
+    console.log('✅ Routes loaded and view ready');
   }
 
   checkIfMobile() {
@@ -224,9 +245,8 @@ export class HomeComponent {
       try {
 
         const description = `Distance: ${distanceKm}km, Duration: ${durationMin}min, Max: ${stats.maxSpeed.toFixed(1)}km/h, Avg: ${stats.averageSpeed.toFixed(1)}km/h`;
-        const id = await this._gpsService.saveCurrentRoute(name, description);
+        const id = await this.saveCurrentRoute(name, description);
 
-        console.log('💾 Route saved with ID:', id);
         alert(`Route "${name}" saved successfully!`);
         await this.loadSavedRoutes();
         this.clearCurrentRoute();
@@ -235,6 +255,172 @@ export class HomeComponent {
         alert('Failed to save route. Please try again.');
       }
     }
+  }
+
+  async saveCurrentRoute(name?: string, description?: string): Promise<string> {
+    if (this.routeCoordinates.length === 0) {
+      throw new Error('No route to save');
+    }
+
+    const endTime = Date.now();
+    const duration = (endTime - this.routeStartTime) / 1000;
+    const averageSpeed = duration > 0 ? (this.routeDistance / duration) * 3.6 : 0;
+
+    const route: SavedRoute = {
+      id: this._gpsService.generateId(),
+      name: name || `Ride ${new Date(this.routeStartTime).toLocaleString()}`,
+      distance: this.routeDistance,
+      duration: duration,
+      coordinates: [...this.routeCoordinates],
+      maxSpeed: this.routeMaxSpeed,
+      averageSpeed: averageSpeed,
+      startTime: this.routeStartTime,
+      endTime: endTime,
+      createdAt: new Date(this.routeStartTime).toISOString(),
+      lastUsed: new Date(endTime).toISOString(),
+      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min`
+    };
+
+    await this._IDBService.saveRoute(route);
+    return route.id;
+  }
+
+  async saveMockRoute(routeType: RouteType = 'city', customName?: string, customDescription?: string): Promise<string> {
+    console.log(`🚴 Generating ${routeType} mock route...`);
+
+    // Generate mock coordinates
+    const mockCoordinates = this._mockRouteService.generateMockRoute(routeType);
+
+    // Set the coordinates to your component's route tracking
+    this.routeCoordinates = mockCoordinates;
+
+    // Calculate metrics from the mock data
+    this.calculateRouteMetrics(mockCoordinates);
+
+    // Generate appropriate name and description if not provided
+    const routeName = customName || `${this.capitalizeFirstLetter(routeType)} Training Ride`;
+    const routeDescription = customDescription ||
+      `Mock ${routeType} route with ${mockCoordinates.length} points. Total distance: ${(this.routeDistance / 1000).toFixed(2)}km`;
+
+    // Use your existing save method
+    const routeId = await this.saveCurrentRoute(routeName, routeDescription);
+
+    console.log(`✅ Mock ${routeType} route saved successfully: ${routeId}`);
+    return routeId;
+  }
+
+
+  async savePopularRoute(routeName: string, customName?: string, customDescription?: string): Promise<string> {
+    console.log(`🗺️ Loading popular route: ${routeName}...`);
+
+    // Get pre-defined route coordinates
+    const popularCoordinates = this._mockRouteService.getPopularRoute(routeName);
+
+    // Set the coordinates to your component's route tracking
+    this.routeCoordinates = popularCoordinates;
+
+    // Calculate metrics from the popular route data
+    this.calculateRouteMetrics(popularCoordinates);
+
+    // Use your existing save method
+    const routeId = await this.saveCurrentRoute(
+      customName || routeName,
+      customDescription || `Popular bike route: ${routeName}`
+    );
+
+    console.log(`✅ Popular route "${routeName}" saved successfully: ${routeId}`);
+    return routeId;
+  }
+
+
+  private calculateRouteMetrics(coordinates: any[]): void {
+    if (coordinates.length < 2) {
+      this.routeDistance = 0;
+      this.routeMaxSpeed = 0;
+      this.routeStartTime = Date.now();
+      return;
+    }
+
+    let totalDistance = 0;
+    let maxSpeed = 0;
+
+    // Calculate total distance and max speed
+    for (let i = 1; i < coordinates.length; i++) {
+      const prev = coordinates[i - 1];
+      const curr = coordinates[i];
+
+      // Calculate distance between points using Haversine formula
+      const distance = this.calculateDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+      totalDistance += distance;
+
+      // Track max speed (use provided speed or calculate from distance/time)
+      if (curr.speed && curr.speed > maxSpeed) {
+        maxSpeed = curr.speed;
+      }
+    }
+
+    this.routeDistance = totalDistance;
+    this.routeMaxSpeed = maxSpeed;
+    this.routeStartTime = coordinates[0].timestamp;
+  }
+
+
+  private capitalizeFirstLetter(string: string): string {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
+  async testAllMockRoutes(): Promise<void> {
+    const routeTypes: RouteType[] = ['city', 'country', 'mountain', 'coastal'];
+
+    console.log('🧪 Testing all mock route types...');
+
+    for (const routeType of routeTypes) {
+      try {
+        await this.saveMockRoute(routeType);
+        // Small delay between saves to avoid ID conflicts
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`❌ Failed to save ${routeType} route:`, error);
+      }
+    }
+
+    console.log('✅ All mock route tests completed');
+  }
+
+  // NEW: Test method for popular routes
+  async testAllPopularRoutes(): Promise<void> {
+    const popularRoutes = ['centralParkLoop', 'goldenGateBridge', 'amsterdamCanals', 'londonThames'];
+
+    console.log('🏛️ Testing all popular routes...');
+
+    for (const routeName of popularRoutes) {
+      try {
+        await this.savePopularRoute(routeName);
+        // Small delay between saves to avoid ID conflicts
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error(`❌ Failed to save ${routeName} route:`, error);
+      }
+    }
+
+    console.log('✅ All popular route tests completed');
+  }
+
+  async testCityRoute() {
+    await this.saveMockRoute('city', 'Morning City Commute', 'Test city route with traffic simulation');
+  }
+
+  async testMountainRoute() {
+    await this.saveMockRoute('mountain', 'Mountain Challenge', 'High elevation gain training route');
+  }
+
+  // Save a pre-defined popular route
+  async testCentralPark() {
+    await this.savePopularRoute('centralParkLoop', 'Central Park Loop', 'Classic NYC bike route');
+  }
+
+  async testGoldenGate() {
+    await this.savePopularRoute('goldenGateBridge', 'Golden Gate Tour', 'Scenic San Francisco ride');
   }
 
   clearCurrentRoute(): void {
@@ -249,30 +435,32 @@ export class HomeComponent {
   }
 
   async loadSavedRoutes(): Promise<void> {
+    //  console.log('[loadSavedRoutes] ▶ Called');
     try {
-      this.savedRoutes = await this._IDBService.getAllRoutes();
-      console.log(`📂 Loaded ${this.savedRoutes.length} saved routes`);
+      // console.log('[loadSavedRoutes] About to call getAllRoutes...');
+
+      const routesPromise = this._IDBService.getAllRoutes();
+      //  console.log('[loadSavedRoutes] Promise created, awaiting...');
+
+      this.savedRoutes = await Promise.race([
+        routesPromise,
+        new Promise<SavedRoute[]>((_, reject) =>
+          setTimeout(() => reject(new Error('getAllRoutes timeout after 5s')), 5000)
+        )
+      ]);
+
+      //   console.log(`📂 Loaded ${this.savedRoutes?.length ?? 0} saved routes`);
     } catch (error) {
-      console.error('Failed to load routes:', error);
+      console.error('❌ Failed to load routes:', error);
     }
   }
+
 
   toggleSavedRoutes(): void {
     this.showSavedRoutes = !this.showSavedRoutes;
   }
 
-  viewSavedRoute(route: SavedRoute): void {
 
-    this._gpsService.loadRouteToMap(route);
-
-    // Center map on route
-    if (route.coordinates.length > 0) {
-      const bounds = L.latLngBounds(route.coordinates);
-      this.map.fitBounds(bounds, { padding: [50, 50] });
-    }
-
-    this.showSavedRoutes = false;
-  }
 
   async deleteSavedRoute(route: SavedRoute, event: Event): Promise<void> {
     event.stopPropagation();
@@ -292,9 +480,21 @@ export class HomeComponent {
     }
   }
 
-  formatDistance(meters: number): string {
-    const km = meters / 1000;
-    return km < 1 ? `${meters.toFixed(0)}m` : `${km.toFixed(2)}km`;
+  viewSavedRoute(route: SavedRoute): void {
+
+    this._gpsService.loadRouteToMap(route);
+
+    if (route.coordinates.length > 0) {
+      const bounds = L.latLngBounds(route.coordinates);
+      this.map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    this.showSavedRoutes = false;
+  }
+
+  formatDistance(kilometers: number): string {
+    const m = kilometers / 1000;
+    return m > 1000 ? `${m.toFixed(0)}m` : `${m.toFixed(2)}km`;
   }
 
   formatDuration(seconds: number): string {
@@ -302,13 +502,13 @@ export class HomeComponent {
     const mins = Math.floor((seconds % 3600) / 60);
 
     if (hours > 0) {
-      return `${hours}h ${mins}m`;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
     return `${mins}m`;
   }
 
-  formatSpeed(knots: number): string {
-    return `${knots.toFixed(1)} kn`;
+  formatSpeed(kmh: number): string {
+    return `${kmh.toFixed(1)} km/h`;
   }
 
   formatDate(timestamp: number): string {

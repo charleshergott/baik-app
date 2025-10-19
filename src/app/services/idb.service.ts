@@ -90,25 +90,69 @@ export class IDBService {
   }
 
   async getAllRoutes(): Promise<SavedRoute[]> {
+    // console.log('[getAllRoutes] ▶ Starting method...');
     await this.dbInitialized;
+    // console.log('[getAllRoutes] ✅ Database initialization awaited.');
+
+    // console.log('[getAllRoutes] 🔁 Promise created'); // 👈 put here
+
     return new Promise((resolve, reject) => {
       if (!this.db) {
+        console.error('[getAllRoutes] ❌ Database not initialized!');
         reject(new Error('Database not initialized'));
         return;
       }
+
+      // console.log('[getAllRoutes] 💾 Opening readonly transaction on store:', this.STORE_NAME);
       const transaction = this.db.transaction([this.STORE_NAME], 'readonly');
       const objectStore = transaction.objectStore(this.STORE_NAME);
       const request = objectStore.getAll();
+
       request.onsuccess = () => {
+        //   console.log('[getAllRoutes] 🔍 Fetch successful. Processing results...');
         const routes = request.result as SavedRoute[];
+
+        if (!routes || routes.length === 0) {
+          console.warn('[getAllRoutes] ⚠️ No routes found in store.');
+        } else {
+          //  console.log(`[getAllRoutes] 📦 Retrieved ${routes.length} routes.`);
+          routes.forEach((route, index) => {
+
+            console.log(`📏 Distance: ${route.distance != null ? (route.distance / 1000).toFixed(2) + ' km' : 'N/A'}`);
+            console.log(`⏱️ Duration: ${route.duration != null ? (route.duration / 60).toFixed(1) + ' min' : 'N/A'}`);
+            console.log(`⚡ Max Speed: ${route.maxSpeed != null ? route.maxSpeed.toFixed(1) + ' m/s' : 'N/A'}`);
+            console.log(`🚀 Avg Speed: ${route.averageSpeed != null ? route.averageSpeed.toFixed(1) + ' m/s' : 'N/A'}`);
+
+            if (route.coordinates && route.coordinates.length > 0) {
+              const coordPreview = route.coordinates.slice(0, 3);
+              // console.log(
+              //   `🌍 Coordinates: [${coordPreview
+              //     .map(c => `(${c[0].toFixed(4)}, ${c[1].toFixed(4)})`)
+              //     .join(', ')}${route.coordinates.length > 3 ? ', ...' : ''}]`
+              // );
+            } else {
+              //  console.log('🌍 Coordinates: N/A');
+            }
+            // console.log('───────────────────────────────');
+          });
+        }
+
         routes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        // 👇 this is the key — we log before resolving the promise
+        //  console.log('[getAllRoutes] 🔚 Resolving promise with', routes.length, 'routes');
         resolve(routes);
       };
+
       request.onerror = () => {
+        console.error('[getAllRoutes] ❌ Error fetching routes:', request.error);
         reject(request.error);
       };
     });
   }
+
+
+
 
   async getRoute(id: string): Promise<SavedRoute | null> {
     await this.dbInitialized;

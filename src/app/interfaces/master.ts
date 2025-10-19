@@ -13,6 +13,30 @@ export interface SavedRoute {
     coordinates: [number, number][];
 }
 
+export type RouteType = 'city' | 'country' | 'mountain' | 'coastal';
+
+export interface Coordinate {
+    lat: number;
+    lon: number;
+    altitude?: number;
+    timestamp: number;
+    speed?: number;
+}
+
+export interface RouteConfig {
+    latVariation: number;
+    lonVariation: number;
+    baseSpeed: number;
+    speedVariation: number;
+}
+
+export interface RouteConfigs {
+    city: RouteConfig;
+    country: RouteConfig;
+    mountain: RouteConfig;
+    coastal: RouteConfig;
+}
+
 export interface Route {
     id: string;
     name: string;

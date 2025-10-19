@@ -200,6 +200,8 @@ export class MockGpsService {
     }
   }
 
+
+
   /**
    * Move position based on speed and heading
    */

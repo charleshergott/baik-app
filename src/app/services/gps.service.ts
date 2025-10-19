@@ -480,41 +480,13 @@ export class GpsService {
     return points;
   }
 
-  async saveCurrentRoute(name?: string, description?: string): Promise<string> {
-    if (this.routeCoordinates.length === 0) {
-      throw new Error('No route to save');
-    }
-
-    const endTime = Date.now();
-    const duration = (endTime - this.routeStartTime) / 1000;
-    const averageSpeed = duration > 0 ? (this.routeDistance / duration) * 3.6 : 0;
-
-    const route: SavedRoute = {
-      id: this.generateId(),
-      name: name || `Ride ${new Date(this.routeStartTime).toLocaleString()}`,
-      distance: this.routeDistance,
-      duration: duration,
-      coordinates: [...this.routeCoordinates],
-      maxSpeed: this.routeMaxSpeed,
-      averageSpeed: averageSpeed,
-      startTime: this.routeStartTime,
-      endTime: endTime,
-      createdAt: new Date(this.routeStartTime).toISOString(),
-      lastUsed: new Date(endTime).toISOString(),
-      description: description || `Distance: ${(this.routeDistance / 1000).toFixed(2)}km, Duration: ${Math.floor(duration / 60)}min`
-    };
-
-    await this._IDBService.saveRoute(route);
-    return route.id;
-  }
-
   loadRouteToMap(route: SavedRoute): void {
     this.routeCoordinates$.next(this.routeCoordinates);
     this._IDBService.updateRouteLastUsed(route.id);
     console.log('Route loaded to map');
   }
 
-  private generateId(): string {
+  generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 }

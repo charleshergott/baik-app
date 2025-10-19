@@ -30,19 +30,17 @@
             📂 ({{ savedRoutes.length }})
         </button>
 
-
-
         <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="saveRoute()"
             class="btn-save">
             💾
         </button>
 
-
-
         <button *ngIf="isRecordingRoute || _gpsService.getCurrentRoute().length > 0" (click)="clearCurrentRoute()"
             class="btn-clear">
             🗑️
         </button>
+
+        <button (click)="savePopularRoute('goldenGateBridge')">Test 1</button>
 
     </div>
 
