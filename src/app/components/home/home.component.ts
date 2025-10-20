@@ -1,9 +1,9 @@
-import { ChangeDetectorRef, Component, HostListener, isDevMode, NgZone } from '@angular/core';
+import { ChangeDetectorRef, Component, HostListener, isDevMode, NgZone, ViewChild } from '@angular/core';
 import { RouteType, SavedRoute } from '../../interfaces/master';
 import { GpsService } from '../../services/gps.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { filter, Subscription, take } from 'rxjs';
+import { filter, Subscription, take, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ChronometerComponent } from '../chronometer/chronometer.component';
 import * as L from 'leaflet';
 import { ChronometerService } from '../../services/chronometer.service';
@@ -26,6 +26,7 @@ import { MockRouteService } from '../../services/mock-route.service';
 })
 
 export class HomeComponent {
+  @ViewChild(ChronometerComponent) chronometerComponent?: ChronometerComponent;
 
   selectedTab: string = 'map';
 
@@ -60,12 +61,11 @@ export class HomeComponent {
   //--=====================================================================================
   //--=====================================================================================
 
-
   navigationActive = false;
   totalRouteDistance = 0;
   remainingDistance = 0;
   estimatedTimeRemaining = 0;
-  rollProgressPercentage = 0; // How far through the current waypoint roll we are
+  rollProgressPercentage = 0;
   isRolling = false;
   currentPosition: { latitude: number; longitude: number } | null = null;
   showDistances = true;
@@ -74,9 +74,13 @@ export class HomeComponent {
   private aircraftOffset = 0;
   private animationInterval: any;
   private gpsSubscription?: Subscription;
-  rollSpeed = 2000; // milliseconds per roll
+  rollSpeed = 2000;
   private readonly BIKING_ZOOM_LEVEL = 18;
   private movementZoomSubscription?: Subscription;
+
+  // Track if map is initialized
+  private mapInitialized = false;
+  private gpsInitialized = false;
 
   //--==========================================================================================
 
@@ -91,62 +95,65 @@ export class HomeComponent {
     private _mockRouteService: MockRouteService
   ) {
     this.checkIfMobile();
-
-    // Monitor GPS signal
-    this._gpsService.getCurrentPosition().subscribe(position => {
-      this.hasGpsSignal = position !== null;
-    });
   }
 
   async ngOnInit(): Promise<void> {
-    // Run animation outside Angular zone
-    this._ngZone.runOutsideAngular(() => {
-      this.animationInterval = setInterval(() => {
-        this.aircraftOffset = Math.sin(Date.now() / 1000) * 2;
-        this._ngZone.run(() => {
-          this._cdr.detectChanges();
-        });
-      }, 50);
-    });
-
-    this.movementZoomSubscription = this._chronometerService.onMovementDetected()
-      .subscribe(position => {
-        console.log('🗺️ Zooming map to user position:', position);
-        this.map.setView(
-          [position.lat, position.lng],
-          this.BIKING_ZOOM_LEVEL,
-          { animate: true, duration: 1 }
-        );
-      });
-
+    // Seed mock routes only in dev mode
     if (isDevMode()) {
       await this._gpsService.seedMockRoutesIfEmpty();
     }
 
+    // Subscribe to movement detection for auto-zoom
+    this.movementZoomSubscription = this._chronometerService.onMovementDetected()
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged((prev, curr) =>
+          prev.lat === curr.lat && prev.lng === curr.lng
+        )
+      )
+      .subscribe(position => {
+        if (this.map && this.mapInitialized) {
+          console.log('🗺️ Zooming map to user position:', position);
+          this.map.setView(
+            [position.lat, position.lng],
+            this.BIKING_ZOOM_LEVEL,
+            { animate: true, duration: 1 }
+          );
+        }
+      });
   }
 
   async ngAfterViewInit(): Promise<void> {
-    // console.log('[ngAfterViewInit] ▶ Starting');
+    console.log('[ngAfterViewInit] ▶ Starting initialization');
 
-    //  console.log('[ngAfterViewInit] 1️⃣ Initializing map...');
+    // 1. Initialize map first
     this.initializeMap();
-    //  console.log('[ngAfterViewInit] ✅ Map initialized');
+    this.mapInitialized = true;
+    console.log('[ngAfterViewInit] ✅ Map initialized');
 
-    //  console.log('[ngAfterViewInit] 2️⃣ Starting GPS tracking...');
+    // 2. Start GPS tracking
     this._gpsService.startTracking();
-    // console.log('[ngAfterViewInit] ✅ GPS tracking started');
+    console.log('[ngAfterViewInit] ✅ GPS tracking started');
 
-    // console.log('[ngAfterViewInit] 3️⃣ Initializing GPS with map...');
+    // 3. Wait longer for GPS to stabilize (2 seconds) before using it
+    console.log('[ngAfterViewInit] ⏳ Waiting 2 seconds for GPS to stabilize...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     this.initializeGPSWithMap();
-    // console.log('[ngAfterViewInit] ✅ GPS initialized with map');
+    this.gpsInitialized = true;
+    console.log('[ngAfterViewInit] ✅ GPS initialized with map');
 
-    // console.log('[ngAfterViewInit] 4️⃣ Subscribing to route updates...');
+    // 4. Subscribe to route updates
     this.subscribeToRouteUpdates();
-    //  console.log('[ngAfterViewInit] ✅ Subscribed to route updates');
+    console.log('[ngAfterViewInit] ✅ Subscribed to route updates');
 
-    console.log('[ngAfterViewInit] 5️⃣ Loading saved routes...');
+    // 5. Load saved routes
+    console.log('[ngAfterViewInit] ▶ Loading saved routes...');
     await this.loadSavedRoutes();
-    console.log('✅ Routes loaded and view ready');
+    console.log('[ngAfterViewInit] ✅ Routes loaded and view ready');
+
+    // 6. Ensure chronometer is ready
+    this._cdr.detectChanges();
   }
 
   checkIfMobile() {
@@ -154,44 +161,64 @@ export class HomeComponent {
   }
 
   private initializeGPSWithMap(): void {
+    // Use strong debouncing and filtering to eliminate GPS spike noise
     this._gpsService.getCurrentPosition().pipe(
       filter(position => position !== null),
+      debounceTime(1000),
+      distinctUntilChanged((prev, curr) =>
+        prev && curr &&
+        Math.abs(prev.latitude - curr.latitude) < 0.00001 &&
+        Math.abs(prev.longitude - curr.longitude) < 0.00001
+      ),
       take(1)
     ).subscribe(position => {
-      if (position && this.map) {
-        console.log('📍 Initial GPS signal received, centering map once');
-        this.map.setView([position.latitude, position.longitude], 12);
+      if (position && this.map && this.mapInitialized) {
+        console.log('📍 GPS signal stabilized, centering map at zoom level', this.BIKING_ZOOM_LEVEL);
+        this.map.setView(
+          [position.latitude, position.longitude],
+          this.BIKING_ZOOM_LEVEL,
+          { animate: true, duration: 0.5 }
+        );
         this.startTrackingUserPosition();
       }
     });
   }
 
   private startTrackingUserPosition(): void {
-    this._gpsService.getCurrentPosition().subscribe(position => {
-      if (position && this.map) {
+    // Strong debouncing to prevent GPS spikes from corrupting chronometer state
+    this._gpsService.getCurrentPosition().pipe(
+      filter(position => position !== null),
+      debounceTime(2000),
+      distinctUntilChanged((prev, curr) =>
+        prev && curr &&
+        Math.abs(prev.latitude - curr.latitude) < 0.00001 &&
+        Math.abs(prev.longitude - curr.longitude) < 0.00001
+      )
+    ).subscribe(position => {
+      if (position && this.map && this.mapInitialized) {
         this.showUserLocationOnMap(position);
         this.hasGpsSignal = true;
+        this._cdr.markForCheck();
       }
     });
   }
 
-
   private subscribeToRouteUpdates(): void {
-    this.routeSubscription = this._gpsService.getRouteCoordinates().subscribe(coordinates => {
-      if (coordinates.length > 0) {
+    this.routeSubscription = this._gpsService.getRouteCoordinates().pipe(
+      debounceTime(300)
+    ).subscribe(coordinates => {
+      if (coordinates.length > 0 && this.mapInitialized) {
         this.updateGpsRouteOnMap(coordinates);
       }
     });
   }
 
   private updateGpsRouteOnMap(coordinates: [number, number][]): void {
-    if (!this.map) return;
+    if (!this.map || !this.mapInitialized) return;
 
     if (this.gpsRouteLine) {
-      // Update existing route
       this.gpsRouteLine.setLatLngs(coordinates);
     } else {
-      // Create new route line
       this.gpsRouteLine = L.polyline(coordinates, {
         color: '#FF5722',
         weight: 4,
@@ -201,7 +228,6 @@ export class HomeComponent {
       }).addTo(this.map);
     }
 
-    // Update stats
     if (this.isRecordingRoute) {
       this.currentRouteStats = this._gpsService.getRouteStatsToTraceRouteOnMap();
     }
@@ -213,17 +239,24 @@ export class HomeComponent {
       return;
     }
 
+    // Ensure chronometer component is initialized
+    if (!this.chronometerComponent) {
+      console.warn('⚠️ Chronometer component not available');
+      this._cdr.detectChanges();
+      return;
+    }
+
     this._gpsService.clearRoute();
     this._gpsService.startRouteRecording();
+
     this.isRecordingRoute = true;
 
-    // Clear previous GPS route line
     if (this.gpsRouteLine) {
       this.map.removeLayer(this.gpsRouteLine);
       this.gpsRouteLine = null;
     }
 
-    console.log('🎬 Started recording route');
+    console.log('🎬 Started recording route. Chronometer will auto-start on movement.');
   }
 
   async saveRoute(): Promise<void> {
@@ -243,7 +276,6 @@ export class HomeComponent {
 
     if (name) {
       try {
-
         const description = `Distance: ${distanceKm}km, Duration: ${durationMin}min, Max: ${stats.maxSpeed.toFixed(1)}km/h, Avg: ${stats.averageSpeed.toFixed(1)}km/h`;
         const id = await this.saveCurrentRoute(name, description);
 
@@ -288,41 +320,27 @@ export class HomeComponent {
   async saveMockRoute(routeType: RouteType = 'city', customName?: string, customDescription?: string): Promise<string> {
     console.log(`🚴 Generating ${routeType} mock route...`);
 
-    // Generate mock coordinates
     const mockCoordinates = this._mockRouteService.generateMockRoute(routeType);
-
-    // Set the coordinates to your component's route tracking
     this.routeCoordinates = mockCoordinates;
-
-    // Calculate metrics from the mock data
     this.calculateRouteMetrics(mockCoordinates);
 
-    // Generate appropriate name and description if not provided
     const routeName = customName || `${this.capitalizeFirstLetter(routeType)} Training Ride`;
     const routeDescription = customDescription ||
       `Mock ${routeType} route with ${mockCoordinates.length} points. Total distance: ${(this.routeDistance / 1000).toFixed(2)}km`;
 
-    // Use your existing save method
     const routeId = await this.saveCurrentRoute(routeName, routeDescription);
 
     console.log(`✅ Mock ${routeType} route saved successfully: ${routeId}`);
     return routeId;
   }
 
-
   async savePopularRoute(routeName: string, customName?: string, customDescription?: string): Promise<string> {
     console.log(`🗺️ Loading popular route: ${routeName}...`);
 
-    // Get pre-defined route coordinates
     const popularCoordinates = this._mockRouteService.getPopularRoute(routeName);
-
-    // Set the coordinates to your component's route tracking
     this.routeCoordinates = popularCoordinates;
-
-    // Calculate metrics from the popular route data
     this.calculateRouteMetrics(popularCoordinates);
 
-    // Use your existing save method
     const routeId = await this.saveCurrentRoute(
       customName || routeName,
       customDescription || `Popular bike route: ${routeName}`
@@ -331,7 +349,6 @@ export class HomeComponent {
     console.log(`✅ Popular route "${routeName}" saved successfully: ${routeId}`);
     return routeId;
   }
-
 
   private calculateRouteMetrics(coordinates: any[]): void {
     if (coordinates.length < 2) {
@@ -344,16 +361,13 @@ export class HomeComponent {
     let totalDistance = 0;
     let maxSpeed = 0;
 
-    // Calculate total distance and max speed
     for (let i = 1; i < coordinates.length; i++) {
       const prev = coordinates[i - 1];
       const curr = coordinates[i];
 
-      // Calculate distance between points using Haversine formula
       const distance = this.calculateDistance(prev.lat, prev.lon, curr.lat, curr.lon);
       totalDistance += distance;
 
-      // Track max speed (use provided speed or calculate from distance/time)
       if (curr.speed && curr.speed > maxSpeed) {
         maxSpeed = curr.speed;
       }
@@ -363,7 +377,6 @@ export class HomeComponent {
     this.routeMaxSpeed = maxSpeed;
     this.routeStartTime = coordinates[0].timestamp;
   }
-
 
   private capitalizeFirstLetter(string: string): string {
     return string.charAt(0).toUpperCase() + string.slice(1);
@@ -377,7 +390,6 @@ export class HomeComponent {
     for (const routeType of routeTypes) {
       try {
         await this.saveMockRoute(routeType);
-        // Small delay between saves to avoid ID conflicts
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error(`❌ Failed to save ${routeType} route:`, error);
@@ -387,7 +399,6 @@ export class HomeComponent {
     console.log('✅ All mock route tests completed');
   }
 
-  // NEW: Test method for popular routes
   async testAllPopularRoutes(): Promise<void> {
     const popularRoutes = ['centralParkLoop', 'goldenGateBridge', 'amsterdamCanals', 'londonThames'];
 
@@ -396,7 +407,6 @@ export class HomeComponent {
     for (const routeName of popularRoutes) {
       try {
         await this.savePopularRoute(routeName);
-        // Small delay between saves to avoid ID conflicts
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         console.error(`❌ Failed to save ${routeName} route:`, error);
@@ -414,7 +424,6 @@ export class HomeComponent {
     await this.saveMockRoute('mountain', 'Mountain Challenge', 'High elevation gain training route');
   }
 
-  // Save a pre-defined popular route
   async testCentralPark() {
     await this.savePopularRoute('centralParkLoop', 'Central Park Loop', 'Classic NYC bike route');
   }
@@ -435,12 +444,8 @@ export class HomeComponent {
   }
 
   async loadSavedRoutes(): Promise<void> {
-    //  console.log('[loadSavedRoutes] ▶ Called');
     try {
-      // console.log('[loadSavedRoutes] About to call getAllRoutes...');
-
       const routesPromise = this._IDBService.getAllRoutes();
-      //  console.log('[loadSavedRoutes] Promise created, awaiting...');
 
       this.savedRoutes = await Promise.race([
         routesPromise,
@@ -449,18 +454,15 @@ export class HomeComponent {
         )
       ]);
 
-      //   console.log(`📂 Loaded ${this.savedRoutes?.length ?? 0} saved routes`);
+      console.log(`📂 Loaded ${this.savedRoutes?.length ?? 0} saved routes`);
     } catch (error) {
       console.error('❌ Failed to load routes:', error);
     }
   }
 
-
   toggleSavedRoutes(): void {
     this.showSavedRoutes = !this.showSavedRoutes;
   }
-
-
 
   async deleteSavedRoute(route: SavedRoute, event: Event): Promise<void> {
     event.stopPropagation();
@@ -481,7 +483,6 @@ export class HomeComponent {
   }
 
   viewSavedRoute(route: SavedRoute): void {
-
     this._gpsService.loadRouteToMap(route);
 
     if (route.coordinates.length > 0) {
@@ -530,19 +531,18 @@ export class HomeComponent {
     this._gpsService.getCurrentPosition().pipe(
       take(1)
     ).subscribe(position => {
-      if (position && this.map) {
+      if (position && this.map && this.mapInitialized) {
         console.log('📍 Manual centering on current position');
-        this.map.setView([position.latitude, position.longitude], 12);
+        this.map.setView([position.latitude, position.longitude], this.BIKING_ZOOM_LEVEL);
       }
     });
   }
 
   private initializeMap(): void {
-
     this.map = L.map('map', {
-      zoomControl: false,      // Removes zoom buttons
-      attributionControl: false // Removes attribution text
-    }).setView([40.7128, -74.0060], 8);
+      zoomControl: false,
+      attributionControl: false
+    }).setView([40.7128, -74.0060], this.BIKING_ZOOM_LEVEL);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
@@ -553,9 +553,8 @@ export class HomeComponent {
     }
   }
 
-
   private calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-    const R = 3440.065; // Nautical miles
+    const R = 3440.065;
     const dLat = this.toRadians(lat2 - lat1);
     const dLng = this.toRadians(lng2 - lng1);
     const a =
@@ -570,11 +569,10 @@ export class HomeComponent {
     return degrees * (Math.PI / 180);
   }
 
-
   private centerMapOnUser(): void {
     this._gpsService.getCurrentPosition().subscribe(position => {
-      if (position) {
-        this.map.setView([position.latitude, position.longitude], 10);
+      if (position && this.mapInitialized) {
+        this.map.setView([position.latitude, position.longitude], this.BIKING_ZOOM_LEVEL);
       }
     });
   }
@@ -585,7 +583,7 @@ export class HomeComponent {
   }
 
   private showUserLocationOnMap(position: any): void {
-    if (!this.map || !this.map.getContainer()) {
+    if (!this.map || !this.map.getContainer() || !this.mapInitialized) {
       console.warn('Map not ready yet, skipping marker update');
       return;
     }
@@ -623,7 +621,6 @@ export class HomeComponent {
     this.checkIfMobile();
   }
 
-
   toggleDistances(): void {
     this.showDistances = !this.showDistances;
   }
@@ -644,5 +641,6 @@ export class HomeComponent {
       this.routeSubscription.unsubscribe();
     }
     this.movementZoomSubscription?.unsubscribe();
+    this.gpsSubscription?.unsubscribe();
   }
 }
