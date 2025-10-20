@@ -179,6 +179,8 @@ export class HomeComponent {
           this.BIKING_ZOOM_LEVEL,
           { animate: true, duration: 0.5 }
         );
+        // Add user marker on initial GPS signal
+        this.showUserLocationOnMap(position);
         this.startTrackingUserPosition();
       }
     });
