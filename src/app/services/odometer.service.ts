@@ -14,6 +14,8 @@ export class OdometerService implements OnDestroy {
 
   // Thresholds
   MIN_SPEED_THRESHOLD = 2; // km/h - match GPS service
+  private MIN_GPS_ACCURACY = 25; // meters - if accuracy > 25m, GPS is unreliable (indoors)
+  private GPS_NOISE_SPEED_THRESHOLD = 0.5; // km/h - reject speeds below this (GPS jitter)
 
   // Trip statistics
   private tripDistance$ = new BehaviorSubject<number>(0);
@@ -35,6 +37,7 @@ export class OdometerService implements OnDestroy {
   // Tracking state
   private isTracking = false;
   private lastPosition: Position | null = null;
+  private lastPositionAccuracy: number | null = null;
   private MAX_ACCELERATION_MS2 = 5; // Maximum realistic acceleration in m/s²
 
   // Subscriptions
@@ -65,10 +68,33 @@ export class OdometerService implements OnDestroy {
     }
   }
 
-  calculateSpeed(lat: number, lon: number, timestamp: number): number {
+  /**
+   * Calculate speed from GPS position change
+   * @param lat Current latitude
+   * @param lon Current longitude
+   * @param timestamp Current timestamp (ms)
+   * @param accuracy GPS accuracy in meters (optional - reject if poor)
+   */
+  calculateSpeed(lat: number, lon: number, timestamp: number, accuracy?: number): number {
     if (!this.lastPosition || !this.lastPositionTime) {
       this.lastPosition = { latitude: lat, longitude: lon, timestamp };
       this.lastPositionTime = timestamp;
+      this.lastPositionAccuracy = accuracy || null;
+      return 0;
+    }
+
+    // FILTER 1: Reject if GPS accuracy is poor (indoors = high uncertainty)
+    if (accuracy && accuracy > this.MIN_GPS_ACCURACY) {
+      console.log(`⚠️ GPS accuracy too poor (${accuracy.toFixed(0)}m), ignoring position`);
+      return 0;
+    }
+
+    // FILTER 2: Reject if last position had poor accuracy
+    if (this.lastPositionAccuracy && this.lastPositionAccuracy > this.MIN_GPS_ACCURACY) {
+      console.log(`⚠️ Last GPS accuracy was too poor, resetting position`);
+      this.lastPosition = { latitude: lat, longitude: lon, timestamp };
+      this.lastPositionTime = timestamp;
+      this.lastPositionAccuracy = accuracy || null;
       return 0;
     }
 
@@ -88,13 +114,23 @@ export class OdometerService implements OnDestroy {
     const speedMs = distance / timeDiff; // meters per second
     const speedKmh = speedMs * 3.6; // km/h
 
-    // Filter: Check for unrealistic speeds
+    // FILTER 3: Reject speeds below noise threshold (GPS jitter)
+    if (speedKmh < this.GPS_NOISE_SPEED_THRESHOLD) {
+      console.log(`⚠️ Speed below noise threshold (${speedKmh.toFixed(2)} km/h), ignoring`);
+      // Still update position for next calculation, but don't count speed
+      this.lastPosition = { latitude: lat, longitude: lon, timestamp };
+      this.lastPositionTime = timestamp;
+      this.lastPositionAccuracy = accuracy || null;
+      return 0;
+    }
+
+    // FILTER 4: Check for unrealistic speeds
     if (speedKmh > this.MAX_REALISTIC_SPEED_KMH) {
       console.log(`⚠️ Speed spike detected and rejected: ${speedKmh.toFixed(1)} km/h`);
       return 0;
     }
 
-    // Filter: Check for unrealistic acceleration
+    // FILTER 5: Check for unrealistic acceleration
     if (this.currentSpeed > 0) {
       const lastSpeedMs = this.currentSpeed / 3.6;
       const acceleration = Math.abs(speedMs - lastSpeedMs) / timeDiff;
@@ -108,6 +144,7 @@ export class OdometerService implements OnDestroy {
     // Update last position for next calculation
     this.lastPosition = { latitude: lat, longitude: lon, timestamp };
     this.lastPositionTime = timestamp;
+    this.lastPositionAccuracy = accuracy || null;
 
     return speedKmh;
   }
@@ -142,7 +179,7 @@ export class OdometerService implements OnDestroy {
   }
 
   /**
-   * NEW: Update trip distance with meters traveled
+   * Update trip distance with meters traveled
    */
   updateTripDistance(meters: number): void {
     if (!this.isTracking) return;
@@ -155,7 +192,7 @@ export class OdometerService implements OnDestroy {
   }
 
   /**
-   * NEW: Update total distance with meters traveled
+   * Update total distance with meters traveled
    */
   updateTotalDistance(meters: number): void {
     if (!this.isTracking) return;
@@ -168,7 +205,7 @@ export class OdometerService implements OnDestroy {
   }
 
   /**
-   * NEW: Update time tracking
+   * Update time tracking
    */
   updateTimeTracking(timeDiff: number): void {
     if (!this.isTracking) return;
@@ -189,6 +226,26 @@ export class OdometerService implements OnDestroy {
 
   getMaxRealisticSpeed(): number {
     return this.MAX_REALISTIC_SPEED_KMH;
+  }
+
+  /**
+   * Set minimum GPS accuracy threshold (in meters)
+   * Higher values = reject more positions (more strict)
+   * Default: 25m (typical GPS accuracy)
+   */
+  setMinGpsAccuracy(meters: number): void {
+    this.MIN_GPS_ACCURACY = Math.max(0, meters);
+    console.log(`📍 Min GPS accuracy threshold set to ${this.MIN_GPS_ACCURACY}m`);
+  }
+
+  /**
+   * Set GPS noise speed threshold (in km/h)
+   * Speeds below this are considered GPS jitter
+   * Default: 0.5 km/h
+   */
+  setGpsNoiseThreshold(speedKmh: number): void {
+    this.GPS_NOISE_SPEED_THRESHOLD = Math.max(0, speedKmh);
+    console.log(`📊 GPS noise threshold set to ${this.GPS_NOISE_SPEED_THRESHOLD} km/h`);
   }
 
   updateAverageSpeed(): void {
@@ -214,6 +271,7 @@ export class OdometerService implements OnDestroy {
     this.isTracking = false;
     this.lastPosition = null;
     this.lastPositionTime = 0;
+    this.lastPositionAccuracy = null;
     this.lastUpdateTime = null;
     this.speedHistory = [];
     console.log('🛑 Odometer tracking stopped');
